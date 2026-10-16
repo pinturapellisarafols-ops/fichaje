@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Fichaje · Pellisa Ràfols</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .card { background: #ffffff; width: 100%; max-width: 400px; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; }
+    .badge { display: inline-block; background: #e8f0fe; color: #1a73e8; font-weight: bold; padding: 6px 14px; border-radius: 20px; font-size: 14px; margin-bottom: 12px; }
+    h2 { margin: 8px 0; color: #202124; font-size: 22px; }
+    p { color: #5f6368; font-size: 14px; margin: 4px 0 16px 0; }
+    .info-box { background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 12px; padding: 12px; margin-bottom: 20px; text-align: left; }
+    .info-item { font-size: 13px; color: #3c4043; margin-bottom: 4px; }
+    .info-item strong { color: #202124; }
+    .btn { display: block; width: 100%; border: none; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; text-align: center; }
+    .btn-entrada { background: #34a853; color: white; }
+    .btn-salida { background: #ea4335; color: white; }
+    .btn-pin { background: #1a73e8; color: white; }
+    .btn:disabled { background: #dadce0; color: #80868b; cursor: not-allowed; }
+    .pin { width: 100%; padding: 14px; font-size: 26px; letter-spacing: 12px; text-align: center; border: 2px solid #dadce0; border-radius: 12px; margin-top: 8px; }
+    .pin:focus { outline: none; border-color: #1a73e8; }
+    .etiqueta { font-size: 13px; color: #5f6368; text-align: left; margin-top: 10px; }
+    .oculto { display: none; }
+    #statusMsg { margin-top: 16px; font-weight: bold; font-size: 14px; min-height: 20px; }
+    .success { color: #1e8e3e; }
+    .error { color: #d93025; }
+    .fotos { margin-top: 22px; padding-top: 16px; border-top: 1px solid #e8eaed; text-align: left; }
+    .fotos h3 { margin: 0 0 4px 0; font-size: 16px; color: #202124; }
+    .fotos .ayuda { font-size: 13px; color: #5f6368; margin: 0 0 6px 0; }
+    .btn-foto { background: #1a73e8; color: white; }
+    .btn-galeria { background: #e8f0fe; color: #1a73e8; font-size: 16px; padding: 12px; }
+    #fotosMsg { margin-top: 10px; font-size: 14px; font-weight: bold; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge" id="txtOperario">Operario</div>
+    <h2>OT: <span id="txtOt">…</span></h2>
+    <p>Control de Jornada</p>
+
+    <div class="info-box">
+      <div class="info-item"><strong>Cliente:</strong> <span id="txtCliente"></span></div>
+      <div class="info-item"><strong>Descripción:</strong> <span id="txtDescripcion"></span></div>
+    </div>
+
+    <!-- Primer acceso: crear PIN -->
+    <div id="panelCrear" class="oculto">
+      <p><strong>Primera vez:</strong> crea tu PIN de 4 cifras. Te lo pediremos en cada fichaje.</p>
+      <div class="etiqueta">Nuevo PIN</div>
+      <input id="pinNuevo" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off">
+      <div class="etiqueta">Repite el PIN</div>
+      <input id="pinNuevo2" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off">
+      <button id="btnCrear" class="btn btn-pin">🔑 GUARDAR PIN</button>
+    </div>
+
+    <!-- Fichaje normal -->
+    <div id="panelFichar" class="oculto">
+      <div class="etiqueta">Tu PIN</div>
+      <input id="pin" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off">
+      <button id="btnEntrada" class="btn btn-entrada">▶ FICHAR ENTRADA</button>
+      <button id="btnSalida" class="btn btn-salida">⏹ FICHAR SALIDA</button>
+    </div>
+
+    <div id="statusMsg">Cargando…</div>
+
+    <!-- Fotos de control de calidad -->
+    <div id="panelFotos" class="fotos oculto">
+      <h3>📷 Fotos de la faena</h3>
+      <p class="ayuda">Para el control de calidad. Escribe tu PIN arriba y haz una o varias fotos.</p>
+      <label class="btn btn-foto" for="fotoCamara">📷 HACER FOTO</label>
+      <input id="fotoCamara" class="oculto" type="file" accept="image/*" capture="environment">
+      <label class="btn btn-galeria" for="fotoGaleria">🖼️ Elegir de la galería</label>
+      <input id="fotoGaleria" class="oculto" type="file" accept="image/*" multiple>
+      <div id="fotosMsg"></div>
+    </div>
+  </div>
+
+  <script>
+    // Dirección del script de Google (implementación de la aplicación web). No cambia al publicar versiones nuevas.
+    const API = 'https://script.google.com/macros/s/AKfycbzq594Jk7VnAxM5gFUEt3E2Ui8dChSJ3tp2f7WwtbxPDMVWfArRtBLDFuhBlyOkbYWm/exec';
+
+    const $ = id => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    let ot = (params.get('ot') || '').trim();
+    let operario = (params.get('operario') || '').trim();
+    let fichado = false;
+
+    function estado(texto, clase) { $('statusMsg').innerText = texto; $('statusMsg').className = clase || ''; }
+    function botones() { $('btnEntrada').disabled = fichado; $('btnSalida').disabled = !fichado; }
+    function soloCifras(el) { el.addEventListener('input', () => { el.value = el.value.replace(/\D/g, '').slice(0, 4); }); }
+    ['pinNuevo', 'pinNuevo2', 'pin'].forEach(id => soloCifras($(id)));
+
+    // Llamada al script. text/plain + sin cookies: no depende de la cuenta de Google del móvil.
+    async function api(datos) {
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify(datos), credentials: 'omit', redirect: 'follow' });
+      if (!r.ok) throw new Error('El servidor no responde (' + r.status + ')');
+      return r.json();
+    }
+
+    function mostrarFichar() {
+      $('panelCrear').classList.add('oculto');
+      $('panelFichar').classList.remove('oculto');
+      $('panelFotos').classList.remove('oculto');
+      botones();
+    }
+
+    async function cargar() {
+      $('txtOperario').innerText = operario || 'Operario';
+      $('txtOt').innerText = ot || 'Sin código';
+      if (!ot || !operario) { estado('Este enlace está incompleto. Usa el enlace del evento del calendario.', 'error'); return; }
+      try {
+        const info = await api({ accion: 'info', ot: ot, operario: operario });
+        operario = info.operario || operario;
+        $('txtOperario').innerText = operario;
+        $('txtCliente').innerText = info.cliente || '';
+        $('txtDescripcion').innerText = info.descripcion || '';
+        fichado = !!info.yaFichado;
+        estado('');
+        if (info.pinEstado === 'desconocido') estado('Este enlace no corresponde a ningún operario configurado. Avisa al responsable.', 'error');
+        else if (info.pinEstado === 'crear') $('panelCrear').classList.remove('oculto');
+        else mostrarFichar();
+      } catch (e) {
+        estado('No se puede conectar. Comprueba la conexión y recarga la página. (' + e.message + ')', 'error');
+      }
+    }
+
+    $('btnCrear').addEventListener('click', async () => {
+      $('btnCrear').disabled = true;
+      estado('Guardando PIN...');
+      try {
+        const res = await api({ accion: 'crearPin', operario: operario, pin: $('pinNuevo').value, pin2: $('pinNuevo2').value });
+        if (!res.ok) { estado(res.mensaje, 'error'); return; }
+        estado(res.mensaje, 'success');
+        mostrarFichar();
+      } catch (e) {
+        estado('Error: ' + e.message, 'error');
+      } finally {
+        $('btnCrear').disabled = false;
+      }
+    });
+
+    async function fichar(tipo) {
+      const pin = $('pin').value;
+      if (!/^\d{4}$/.test(pin)) { estado('Escribe tu PIN de 4 cifras.', 'error'); return; }
+      $('btnEntrada').disabled = true;
+      $('btnSalida').disabled = true;
+      estado('Guardando fichaje...');
+      try {
+        const res = await api({ accion: 'fichar', operario: operario, ot: ot, tipo: tipo, pin: pin });
+        fichado = !!res.nuevoEstado;
+        estado(res.mensaje, res.error ? 'error' : 'success');
+        if (!res.error) $('pin').value = '';
+      } catch (e) {
+        estado('Error: ' + e.message + '. Vuelve a intentarlo.', 'error');
+      }
+      botones();
+    }
+    $('btnEntrada').addEventListener('click', () => fichar('Entrada'));
+    $('btnSalida').addEventListener('click', () => fichar('Salida'));
+
+    // ---- Fotos: se reducen en el móvil (máx. 1600 px) y se suben de una en una ----
+    let fotosSubidas = 0;
+    function msgFotos(texto, clase) { $('fotosMsg').innerText = texto; $('fotosMsg').className = clase || ''; }
+
+    function reducir(file) {
+      return new Promise((ok, ko) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * k);
+          c.height = Math.round(img.height * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          ok(c.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('No se puede leer la imagen')); };
+        img.src = url;
+      });
+    }
+
+    async function subirFotos(input) {
+      const archivos = Array.from(input.files || []);
+      input.value = '';
+      if (!archivos.length) return;
+      const pin = $('pin').value;
+      if (!/^\d{4}$/.test(pin)) { msgFotos('Escribe primero tu PIN de 4 cifras.', 'error'); $('pin').focus(); return; }
+      let bien = 0;
+      for (let i = 0; i < archivos.length; i++) {
+        msgFotos('Subiendo foto ' + (i + 1) + ' de ' + archivos.length + '...');
+        try {
+          const foto = await reducir(archivos[i]);
+          const res = await api({ accion: 'foto', operario: operario, ot: ot, pin: pin, foto: foto, numero: ++fotosSubidas });
+          if (!res.ok) { msgFotos(res.mensaje, 'error'); return; }
+          bien++;
+          msgFotos('✅ ' + bien + (bien === 1 ? ' foto guardada' : ' fotos guardadas') + '. ' + res.mensaje, 'success');
+        } catch (e) {
+          msgFotos('Error: ' + e.message, 'error');
+          return;
+        }
+      }
+    }
+    $('fotoCamara').addEventListener('change', function () { subirFotos(this); });
+    $('fotoGaleria').addEventListener('change', function () { subirFotos(this); });
+
+    cargar();
+  </script>
+</body>
+</html>
