@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Panel de faenas</title>
+  <style>
+    :root {
+      --bg: #f4f3ef; --surface: #fcfcfb; --surface-2: #f0efea; --border: #e2e0d9;
+      --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7974;
+      --track: #e6e4dd; --accent: #2a78d6;
+      --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --neutral: #a3a29c;
+      --good-text: #006300; --warning-text: #8a5a00; --critical-text: #b02525;
+      --chip: #eceae4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #33332f;
+        --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+        --track: #34342f; --accent: #3987e5; --neutral: #6b6a64;
+        --good-text: #4cc94c; --warning-text: #fab219; --critical-text: #ff7a7a;
+        --chip: #2a2a27;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #33332f;
+      --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+      --track: #34342f; --accent: #3987e5; --neutral: #6b6a64;
+      --good-text: #4cc94c; --warning-text: #fab219; --critical-text: #ff7a7a;
+      --chip: #2a2a27;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text-primary);
+      font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 12px; }
+    h1 { font-size: 22px; margin: 0; }
+    .meta { color: var(--text-muted); font-size: 13px; }
+    .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text-primary);
+      border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+    .btn:hover { background: var(--surface-2); }
+    .filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 16px; }
+    .chipbtn { border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+      border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+    .chipbtn[aria-pressed="true"] { background: var(--text-primary); color: var(--surface); border-color: var(--text-primary); }
+    .filtros label { color: var(--text-secondary); font-size: 13px; display: flex; gap: 6px; align-items: center; margin-left: 4px; }
+    .resumen { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+    .tile .t { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .tile .n { font-size: 26px; font-weight: 700; margin-top: 2px; }
+    .tile .s { color: var(--text-muted); font-size: 12px; }
+    section.dep { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; overflow: hidden; }
+    .dep-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .dep-head h2 { margin: 0; font-size: 18px; }
+    .dep-head .k { color: var(--text-secondary); font-size: 13px; }
+    .dep-head .k b { color: var(--text-primary); }
+    .ot { display: grid; grid-template-columns: minmax(180px, 260px) 1fr minmax(150px, 220px); gap: 6px 16px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border); align-items: center; }
+    .ot:last-child { border-bottom: none; }
+    .ot .cod { font-weight: 700; }
+    .ot .cli { color: var(--text-secondary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ot .desc { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .barra { position: relative; height: 14px; background: var(--track); border-radius: 4px; }
+    .barra .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+    .barra .marca { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text-primary); border-radius: 1px; }
+    .nums { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 12px; color: var(--text-secondary); }
+    .nums b { color: var(--text-primary); }
+    .estado { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .e-good { color: var(--good-text); } .e-good .dot { background: var(--good); }
+    .e-warning { color: var(--warning-text); } .e-warning .dot { background: var(--warning); }
+    .e-critical { color: var(--critical-text); } .e-critical .dot { background: var(--critical); }
+    .e-neutral { color: var(--text-muted); } .e-neutral .dot { background: var(--neutral); }
+    .lado { font-size: 12px; color: var(--text-secondary); }
+    .ops { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .op { background: var(--chip); border-radius: 999px; padding: 2px 8px; font-size: 12px; color: var(--text-primary); }
+    .op.ahora { outline: 2px solid var(--accent); }
+    .vacio { padding: 14px 16px; color: var(--text-muted); }
+    .leyenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+    .leyenda span { display: inline-flex; gap: 5px; align-items: center; }
+    #tip { position: fixed; pointer-events: none; background: var(--text-primary); color: var(--surface); font-size: 12px;
+      padding: 8px 10px; border-radius: 8px; max-width: 280px; display: none; z-index: 10; white-space: pre-line; }
+    .login { max-width: 360px; margin: 12vh auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; text-align: center; }
+    .login input { width: 100%; padding: 12px; font-size: 18px; border: 1px solid var(--border); border-radius: 10px;
+      margin: 12px 0; background: var(--bg); color: var(--text-primary); }
+    .login .btn { width: 100%; padding: 12px; font-size: 16px; background: var(--accent); color: #fff; border: none; }
+    .error { color: var(--critical-text); font-weight: 600; margin-top: 10px; min-height: 18px; }
+    @media (max-width: 760px) {
+      .ot { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="wrap"></div>
+  <div id="tip"></div>
+
+  <script>
+    // Misma dirección del script que usa la página de fichaje.
+    const API = 'https://script.google.com/macros/s/AKfycbzq594Jk7VnAxM5gFUEt3E2Ui8dChSJ3tp2f7WwtbxPDMVWfArRtBLDFuhBlyOkbYWm/exec';
+    const $app = document.getElementById('app');
+    const $tip = document.getElementById('tip');
+    const guardar = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+    const leer = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+
+    let datos = null;
+    let filtroDep = leer('panel_dep') || 'todos';
+    let verAcabadas = leer('panel_acabadas') === '1';
+    let temporizador = null;
+
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const h = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+
+    async function api(cuerpo) {
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify(cuerpo), credentials: 'omit' });
+      if (!r.ok) throw new Error('El servidor no responde (' + r.status + ')');
+      return r.json();
+    }
+
+    function pantallaClave(msg) {
+      $app.innerHTML = '<div class="login"><h1>Panel de faenas</h1>' +
+        '<p class="meta">Escribe la clave del panel (la que pusiste en Planificador → 🔐 Clave del panel).</p>' +
+        '<input id="clave" type="password" autocomplete="current-password">' +
+        '<button class="btn" id="entrar">Entrar</button><div class="error" id="err">' + esc(msg || '') + '</div></div>';
+      const entrar = () => { guardar('panel_clave', document.getElementById('clave').value); cargar(); };
+      document.getElementById('entrar').onclick = entrar;
+      document.getElementById('clave').onkeydown = e => { if (e.key === 'Enter') entrar(); };
+      document.getElementById('clave').focus();
+    }
+
+    async function cargar() {
+      const clave = leer('panel_clave');
+      if (!clave) { pantallaClave(); return; }
+      if (!datos) $app.innerHTML = '<p class="meta">Cargando…</p>';
+      try {
+        const res = await api({ accion: 'panel', clave: clave });
+        if (!res.ok) { guardar('panel_clave', null); pantallaClave(res.mensaje || 'Clave incorrecta.'); return; }
+        datos = res;
+        pintar();
+        clearTimeout(temporizador);
+        temporizador = setTimeout(cargar, 2 * 60 * 1000); // se refresca solo cada 2 minutos
+      } catch (e) {
+        if (!datos) $app.innerHTML = '<p class="error">No se puede conectar: ' + esc(e.message) + '</p>';
+        clearTimeout(temporizador);
+        temporizador = setTimeout(cargar, 60 * 1000);
+      }
+    }
+
+    // Estado de cada faena según horas fichadas / programadas
+    function estadoOT(o) {
+      if (o.acabada) return { c: 'neutral', t: '✔ Acabada' };
+      if (!(o.horas > 0)) return { c: 'neutral', t: '– Sin horas' };
+      const r = o.fichadas / o.horas;
+      if (o.fichadas <= 0) return { c: 'neutral', t: '○ Sin empezar', r: 0 };
+      if (r > 1) return { c: 'critical', t: '✖ Pasada', r: r };
+      if (r >= 0.9) return { c: 'warning', t: '▲ Justa', r: r };
+      return { c: 'good', t: '● Bien', r: r };
+    }
+    const ORDEN = { critical: 0, warning: 1, good: 2, neutral: 3 };
+
+    function pintar() {
+      const deps = datos.departamentos.filter(d => d.ots.length);
+      const visibles = d => d.ots.filter(o => verAcabadas || !o.acabada);
+      const todasOts = deps.flatMap(d => visibles(d).map(o => Object.assign({ dep: d.nombre }, o)));
+      const sum = (arr, k) => arr.reduce((s, o) => s + (Number(o[k]) || 0), 0);
+      const pasadas = todasOts.filter(o => estadoOT(o).c === 'critical').length;
+      const justas = todasOts.filter(o => estadoOT(o).c === 'warning').length;
+      const ahora = todasOts.reduce((s, o) => s + o.ahora.length, 0);
+
+      let html = '<header><h1>Panel de faenas</h1><span class="meta">Actualizado ' + esc(datos.generado) +
+        ' · se refresca solo</span><span style="flex:1"></span>' +
+        '<button class="btn" id="recargar">↻ Actualizar</button> <button class="btn" id="salir">Salir</button></header>';
+
+      html += '<div class="resumen">' +
+        tile('Faenas en curso', todasOts.filter(o => !o.acabada).length, 'en ' + deps.length + ' departamentos') +
+        tile('Horas programadas', h(sum(todasOts, 'horas')) + ' h', 'fichadas ' + h(sum(todasOts, 'fichadas')) + ' h') +
+        tile('Pasadas de horas', pasadas, justas + ' justas (≥ 90 %)') +
+        tile('Fichados ahora', ahora, ahora === 1 ? 'operario trabajando' : 'operarios trabajando') +
+        '</div>';
+
+      html += '<div class="filtros">' +
+        ['todos'].concat(deps.map(d => d.nombre)).map(n =>
+          '<button class="chipbtn" data-dep="' + esc(n) + '" aria-pressed="' + (filtroDep === n) + '">' + (n === 'todos' ? 'Todos' : esc(n)) + '</button>').join('') +
+        '<label><input type="checkbox" id="chkAcabadas"' + (verAcabadas ? ' checked' : '') + '> Ver acabadas</label></div>';
+
+      html += '<div class="leyenda"><span class="e-good"><i class="dot"></i>Bien: menos del 90 % de las horas</span>' +
+        '<span class="e-warning"><i class="dot"></i>Justa: 90–100 %</span>' +
+        '<span class="e-critical"><i class="dot"></i>Pasada: más horas fichadas que programadas</span>' +
+        '<span>▕ marca = horas programadas</span><span><span class="op ahora">▶ nombre</span> = fichado ahora</span></div>';
+
+      deps.filter(d => filtroDep === 'todos' || d.nombre === filtroDep).forEach(d => {
+        const ots = visibles(d).slice().sort((a, b) =>
+          (ORDEN[estadoOT(a).c] - ORDEN[estadoOT(b).c]) || ((estadoOT(b).r || 0) - (estadoOT(a).r || 0)));
+        const prog = sum(ots, 'horas'), fich = sum(ots, 'fichadas');
+        const malas = ots.filter(o => estadoOT(o).c === 'critical').length;
+        html += '<section class="dep"><div class="dep-head"><h2>' + esc(d.nombre) + '</h2>' +
+          '<span class="k">Faenas: <b>' + ots.filter(o => !o.acabada).length + '</b></span>' +
+          '<span class="k">Programadas: <b>' + h(prog) + ' h</b></span>' +
+          '<span class="k">Fichadas: <b>' + h(fich) + ' h</b></span>' +
+          '<span class="k">Pasadas: <b>' + malas + '</b></span>' +
+          '<span class="k">Operarios: <b>' + esc(d.operarios.join(', ') || '—') + '</b></span></div>';
+        if (!ots.length) html += '<div class="vacio">Sin faenas que mostrar.</div>';
+        ots.forEach((o, i) => { html += filaOT(d, o, i); });
+        html += '</section>';
+      });
+      $app.innerHTML = html;
+
+      document.getElementById('recargar').onclick = cargar;
+      document.getElementById('salir').onclick = () => { guardar('panel_clave', null); datos = null; pantallaClave(); };
+      document.querySelectorAll('.chipbtn').forEach(b => b.onclick = () => { filtroDep = b.dataset.dep; guardar('panel_dep', filtroDep); pintar(); });
+      document.getElementById('chkAcabadas').onchange = e => { verAcabadas = e.target.checked; guardar('panel_acabadas', verAcabadas ? '1' : '0'); pintar(); };
+      document.querySelectorAll('[data-tip]').forEach(el => {
+        el.onmousemove = ev => { $tip.textContent = el.dataset.tip; $tip.style.display = 'block';
+          $tip.style.left = Math.min(ev.clientX + 14, innerWidth - 300) + 'px'; $tip.style.top = (ev.clientY + 14) + 'px'; };
+        el.onmouseleave = () => { $tip.style.display = 'none'; };
+      });
+    }
+
+    function tile(t, n, s) { return '<div class="tile"><div class="t">' + esc(t) + '</div><div class="n">' + esc(n) + '</div><div class="s">' + esc(s) + '</div></div>'; }
+
+    function filaOT(d, o, i) {
+      const e = estadoOT(o);
+      const max = Math.max(o.horas || 0, o.fichadas || 0, 0.01);
+      const anchoFill = Math.min(100, (o.fichadas || 0) / max * 100);
+      const posMarca = (o.horas || 0) / max * 100;
+      const color = { good: 'var(--good)', warning: 'var(--warning)', critical: 'var(--critical)', neutral: 'var(--neutral)' }[e.c];
+      const pct = o.horas > 0 ? Math.round(o.fichadas / o.horas * 100) + ' %' : '';
+      const restan = (o.horas || 0) - (o.fichadas || 0);
+      const tip = o.ot + ' · ' + o.cliente + '\nProgramadas: ' + h(o.horas) + ' h\nFichadas: ' + h(o.fichadas) + ' h' +
+        (o.horas > 0 ? '\n' + (restan >= 0 ? 'Quedan: ' + h(restan) + ' h' : 'Pasada en: ' + h(-restan) + ' h') : '') +
+        (o.situacion ? '\n' + o.situacion : '');
+      const ops = o.operarios.map(p => '<span class="op' + (o.ahora.includes(p.nombre) ? ' ahora' : '') + '">' +
+        (o.ahora.includes(p.nombre) ? '▶ ' : '') + esc(p.nombre) + ' ' + h(p.horas) + ' h</span>').join('') +
+        o.ahora.filter(n => !o.operarios.some(p => p.nombre === n)).map(n => '<span class="op ahora">▶ ' + esc(n) + '</span>').join('');
+      return '<div class="ot">' +
+        '<div><div class="cod">' + esc(o.ot) + '</div><div class="cli">' + esc(o.cliente) + '</div><div class="desc">' + esc(o.descripcion) + '</div></div>' +
+        '<div data-tip="' + esc(tip) + '"><div class="barra"><div class="fill" style="width:' + anchoFill + '%;background:' + color + '"></div>' +
+        (o.horas > 0 ? '<div class="marca" style="left:calc(' + posMarca + '% - 1px)"></div>' : '') + '</div>' +
+        '<div class="nums"><span><b>' + h(o.fichadas) + ' h</b> fichadas de <b>' + h(o.horas) + ' h</b> ' + pct + '</span>' +
+        '<span class="estado e-' + e.c + '"><i class="dot"></i>' + e.t + '</span></div>' +
+        '<div class="ops">' + (ops || '<span class="lado">Nadie ha fichado aún</span>') + '</div></div>' +
+        '<div class="lado">' + (o.asignado ? 'Asignado: <b>' + esc(o.asignado) + '</b><br>' : '') +
+        (o.fin ? 'Fin previsto: ' + esc(o.fin) + '<br>' : '') + (o.entrega ? 'Entrega: ' + esc(o.entrega) + '<br>' : '') +
+        esc(o.situacion || '') + '</div></div>';
+    }
+
+    cargar();
+  </script>
+</body>
+</html>
