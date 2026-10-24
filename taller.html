@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Mapa del taller</title>
+  <style>
+    :root {
+      --bg: #0d0f14; --bg-2: #141821; --surface: #1a1f2a; --surface-2: #222836; --border: #2c3445;
+      --text: #eef0f4; --text-2: #b7bdc9; --muted: #7d8596;
+      --glass: #9cc3ff; --wall: #2a3142; --wall-2: #222838; --floor: #1b2030; --floor-lit: #3a2a14;
+      --warm: #ffb347; --flow: #7fb3ff; --flow-2: #b48cff;
+      --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --neutral: #6b7385;
+      --good-t: #4cc94c; --warning-t: #fab219; --critical-t: #ff7a7a;
+      --track: #2b3242;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { background: radial-gradient(ellipse at 50% 35%, #1a2030 0%, var(--bg) 70%); color: var(--text);
+      font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
+    header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 14px 18px 4px; }
+    h1 { margin: 0; font-size: 20px; letter-spacing: .02em; }
+    .meta { color: var(--muted); font-size: 12px; }
+    .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+      padding: 6px 12px; font-size: 13px; cursor: pointer; }
+    .btn:hover { background: var(--surface-2); }
+    .leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0 18px 6px; font-size: 12px; color: var(--text-2); }
+    .leyenda span { display: inline-flex; gap: 6px; align-items: center; }
+    .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .escena { position: relative; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+    svg#mapa { width: 100%; height: auto; display: block; max-height: calc(100vh - 90px); min-width: 760px; }
+    .rotulo { pointer-events: none; paint-order: stroke; stroke: #0d1220; stroke-width: 4px; stroke-linejoin: round; }
+    .sala { cursor: pointer; outline: none; }
+    .sala .suelo { transition: filter .2s; }
+    .sala:hover .suelo, .sala:focus .suelo { filter: brightness(1.35); }
+    .sala:focus .borde { stroke: #ffffff; stroke-width: 2.5; }
+    .flujo { fill: none; stroke-linecap: round; pointer-events: none; }
+    .flujo.vivo { stroke-dasharray: 6 8; animation: corre 1.4s linear infinite; }
+    @keyframes corre { to { stroke-dashoffset: -28; } }
+    @media (prefers-reduced-motion: reduce) { .flujo.vivo { animation: none; } }
+    .lbl { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }
+    .op-lbl { font-size: 10px; pointer-events: none; paint-order: stroke; stroke: #0d1220; stroke-width: 3px; stroke-linejoin: round; }
+    #tip { position: fixed; pointer-events: none; background: #0b0d12ee; border: 1px solid var(--border); color: var(--text);
+      font-size: 12px; padding: 8px 10px; border-radius: 8px; max-width: 260px; display: none; z-index: 20; white-space: pre-line; }
+
+    /* Panel lateral */
+    #cajon { position: fixed; top: 0; right: 0; height: 100%; width: min(460px, 100%); background: var(--bg-2);
+      border-left: 1px solid var(--border); transform: translateX(105%); transition: transform .25s ease; z-index: 30;
+      display: flex; flex-direction: column; }
+    #cajon.abierto { transform: none; }
+    .cj-head { padding: 16px 18px 10px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; }
+    .cj-head h2 { margin: 0; font-size: 20px; }
+    .cj-head .sub { color: var(--muted); font-size: 12px; }
+    .cj-body { overflow: auto; padding: 14px 18px 30px; }
+    .cerrar { margin-left: auto; }
+    .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .kpi .t { color: var(--text-2); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .kpi .n { font-size: 22px; font-weight: 700; }
+    .kpi .s { color: var(--muted); font-size: 11px; }
+    h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin: 16px 0 8px; }
+    .opr { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 6px; }
+    .opr .av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px;
+      background: var(--surface-2); color: var(--text-2); flex: none; }
+    .opr.on .av { background: var(--warm); color: #1b1200; box-shadow: 0 0 12px var(--warm); }
+    .opr .q { color: var(--muted); font-size: 12px; }
+    .opr .h { margin-left: auto; color: var(--text-2); font-size: 12px; white-space: nowrap; }
+    .ot { padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; }
+    .ot .top { display: flex; gap: 8px; align-items: baseline; }
+    .ot .cod { font-weight: 700; }
+    .ot .cli { color: var(--text-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ot .desc { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .barra { position: relative; height: 10px; background: var(--track); border-radius: 4px; margin-top: 8px; }
+    .barra .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+    .barra .marca { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); border-radius: 1px; }
+    .nums { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; font-size: 12px; color: var(--text-2); }
+    .est { font-weight: 700; display: inline-flex; gap: 5px; align-items: center; }
+    .e-good { color: var(--good-t); } .e-warning { color: var(--warning-t); } .e-critical { color: var(--critical-t); } .e-neutral { color: var(--muted); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .e-good .dot { background: var(--good); } .e-warning .dot { background: var(--warning); } .e-critical .dot { background: var(--critical); } .e-neutral .dot { background: var(--neutral); }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .chip { background: var(--surface-2); border-radius: 999px; padding: 2px 8px; font-size: 11px; }
+    .chip.on { outline: 1.5px solid var(--warm); }
+    .vacio { color: var(--muted); padding: 8px 0; }
+    .sit { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+    .login { max-width: 360px; margin: 14vh auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 24px; text-align: center; }
+    .login input { width: 100%; padding: 12px; font-size: 18px; border: 1px solid var(--border); border-radius: 10px; margin: 12px 0;
+      background: var(--bg); color: var(--text); }
+    .login .btn { width: 100%; padding: 12px; font-size: 16px; background: #2a78d6; border: none; }
+    .error { color: var(--critical-t); font-weight: 600; margin-top: 10px; min-height: 18px; }
+    @media (max-width: 700px) {
+      #cajon { top: auto; bottom: 0; height: 78%; width: 100%; border-left: none; border-top: 1px solid var(--border);
+        border-radius: 16px 16px 0 0; transform: translateY(105%); }
+      #cajon.abierto { transform: none; }
+      svg#mapa { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="tip"></div>
+  <aside id="cajon" aria-live="polite"></aside>
+
+  <script>
+    // Misma dirección del script que la página de fichaje y el panel.
+    const API = 'https://script.google.com/macros/s/AKfycbzq594Jk7VnAxM5gFUEt3E2Ui8dChSJ3tp2f7WwtbxPDMVWfArRtBLDFuhBlyOkbYWm/exec';
+    const DEMO = new URLSearchParams(location.search).has('demo');
+    const $app = document.getElementById('app'), $tip = document.getElementById('tip'), $cajon = document.getElementById('cajon');
+    const guardar = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+    const leer = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const h = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+    const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+    let datos = null, salaAbierta = null, temporizador = null, capaRotulos = [], scrollMapa = null;
+
+    // ---------- Distribución de las salas (cuadrícula isométrica) ----------
+    // Producción en el sentido de la ruta: Fresadora → Taller → Pintura → Rotulación → Montaje
+    const SALAS = [
+      { id: 'comercial', nombre: 'Comercial', gx: 0, gy: 0, tipo: 'oficina' },
+      { id: 'fresadora', nombre: 'Fresadora', gx: 1, gy: 0, tipo: 'dep' },
+      { id: 'taller', nombre: 'Taller', gx: 2, gy: 0, tipo: 'dep' },
+      { id: 'planificacion', nombre: 'Planificación', gx: 1, gy: 1, tipo: 'oficina', grande: true },
+      { id: 'pintura', nombre: 'Pintura', gx: 2, gy: 1, tipo: 'dep' },
+      { id: 'entregas', nombre: 'Entregas', gx: 0, gy: 2, tipo: 'oficina' },
+      { id: 'montaje', nombre: 'Montaje', gx: 1, gy: 2, tipo: 'dep' },
+      { id: 'rotulacion', nombre: 'Rotulación', gx: 2, gy: 2, tipo: 'dep' },
+      { id: 'almacen', nombre: 'Almacén', gx: 0, gy: 1, tipo: 'libre' }
+    ];
+    const PASO = 1.4;                // separación entre salas (pasillos)
+    const TW = 250, TH = TW / 2;     // tamaño de una baldosa isométrica
+    const ALTO = 30;                 // altura de las paredes
+    const iso = (x, y) => ({ x: (x - y) * TW / 2, y: (x + y) * TH / 2 });
+    const P = p => p.x.toFixed(1) + ',' + p.y.toFixed(1);
+
+    async function api(cuerpo) {
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify(cuerpo), credentials: 'omit' });
+      if (!r.ok) throw new Error('El servidor no responde (' + r.status + ')');
+      return r.json();
+    }
+
+    function pantallaClave(msg) {
+      $app.innerHTML = '<div class="login"><h1>Mapa del taller</h1>' +
+        '<p class="meta">Escribe la clave del panel (Planificador → 🔐 Clave del panel de faenas).</p>' +
+        '<input id="clave" type="password" autocomplete="current-password">' +
+        '<button class="btn" id="entrar">Entrar</button><div class="error">' + esc(msg || '') + '</div></div>';
+      const entrar = () => { guardar('panel_clave', document.getElementById('clave').value); cargar(); };
+      document.getElementById('entrar').onclick = entrar;
+      document.getElementById('clave').onkeydown = e => { if (e.key === 'Enter') entrar(); };
+    }
+
+    async function cargar() {
+      if (DEMO) { datos = datosDemo(); pintar(); return; }
+      const clave = leer('panel_clave');
+      if (!clave) { pantallaClave(); return; }
+      if (!datos) $app.innerHTML = '<p class="meta" style="padding:20px">Cargando…</p>';
+      try {
+        const res = await api({ accion: 'panel', clave: clave });
+        if (!res.ok) { guardar('panel_clave', null); pantallaClave(res.mensaje || 'Clave incorrecta.'); return; }
+        datos = res;
+        pintar();
+        clearTimeout(temporizador);
+        temporizador = setTimeout(cargar, 2 * 60 * 1000);
+      } catch (e) {
+        if (!datos) $app.innerHTML = '<p class="error" style="padding:20px">No se puede conectar: ' + esc(e.message) + '</p>';
+        clearTimeout(temporizador);
+        temporizador = setTimeout(cargar, 60 * 1000);
+      }
+    }
+
+    // ---------- Cálculos ----------
+    function estadoOT(o) {
+      if (o.acabada) return { c: 'neutral', t: '✔ Acabada', r: 0 };
+      if (!(o.horas > 0)) return { c: 'neutral', t: '– Sin horas', r: 0 };
+      const r = o.fichadas / o.horas;
+      if (o.fichadas <= 0) return { c: 'neutral', t: '○ Sin empezar', r: 0 };
+      if (r > 1) return { c: 'critical', t: '✖ Pasada', r: r };
+      if (r >= 0.9) return { c: 'warning', t: '▲ Justa', r: r };
+      return { c: 'good', t: '● Bien', r: r };
+    }
+    const ORDEN = { critical: 0, warning: 1, good: 2, neutral: 3 };
+
+    function parseFecha(s) {
+      const m = String(s || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (!m) return null;
+      let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+      let d = a, mo = b;
+      if (b > 12 && a <= 12) { d = b; mo = a; }       // formato americano (6/30/2026)
+      const f = new Date(y, mo - 1, d);
+      return isNaN(f) ? null : f;
+    }
+
+    function resumenDep(d) {
+      const pend = d.ots.filter(o => !o.acabada);
+      const ahora = new Set();
+      d.ots.forEach(o => o.ahora.forEach(n => ahora.add(n)));
+      return {
+        pend: pend,
+        prog: pend.reduce((s, o) => s + (o.horas || 0), 0),
+        fich: pend.reduce((s, o) => s + (o.fichadas || 0), 0),
+        pasadas: pend.filter(o => estadoOT(o).c === 'critical').length,
+        justas: pend.filter(o => estadoOT(o).c === 'warning').length,
+        ahora: ahora
+      };
+    }
+
+    function estadoSala(r) {
+      if (!r) return { t: 'sin datos', c: 'neutral' };
+      if (r.pasadas) return { t: 'atención', c: 'critical' };
+      if (r.ahora.size) return { t: 'trabajando', c: 'good' };
+      if (r.pend.length) return { t: 'parado', c: 'warning' };
+      return { t: 'sin faenas', c: 'neutral' };
+    }
+
+    // ---------- Dibujo ----------
+    function pintar() {
+      const porClave = {};
+      datos.departamentos.forEach(d => { porClave[norm(d.nombre).replace(/[^a-z]/g, '').replace(/^rotulacio$/, 'rotulacion')] = d; });
+      // Departamentos que no tengan sala propia ocupan las libres
+      const libres = SALAS.filter(s => s.tipo === 'libre');
+      datos.departamentos.forEach(d => {
+        const k = norm(d.nombre).replace(/[^a-z]/g, '');
+        if (!SALAS.some(s => s.id === k || (s.id === 'rotulacion' && k.indexOf('rotulaci') === 0)) && libres.length) {
+          const s = libres.shift(); s.id = k; s.nombre = d.nombre; s.tipo = 'dep';
+        }
+      });
+      const depDe = s => porClave[s.id] || datos.departamentos.find(d => norm(d.nombre).replace(/[^a-z]/g, '').indexOf(s.id.slice(0, 7)) === 0);
+
+      const todas = datos.departamentos.flatMap(d => d.ots.map(o => Object.assign({ dep: d.nombre }, o)));
+      const res = {};
+      SALAS.forEach(s => { const d = depDe(s); if (s.tipo === 'dep' && d) res[s.id] = resumenDep(d); });
+      const fichadosAhora = new Set(); todas.forEach(o => o.ahora.forEach(n => fichadosAhora.add(n)));
+      const pasadasTot = todas.filter(o => !o.acabada && estadoOT(o).c === 'critical').length;
+
+      // Límites del dibujo
+      const pts = [];
+      SALAS.forEach(s => { const x = s.gx * PASO, y = s.gy * PASO; [[0, 0], [1, 0], [1, 1], [0, 1]].forEach(([a, b]) => pts.push(iso(x + a, y + b))); });
+      const minX = Math.min(...pts.map(p => p.x)) - 40, maxX = Math.max(...pts.map(p => p.x)) + 40;
+      const minY = Math.min(...pts.map(p => p.y)) - ALTO - 70, maxY = Math.max(...pts.map(p => p.y)) + 70;
+
+      let svg = '<svg id="mapa" viewBox="' + [minX, minY, maxX - minX, maxY - minY].map(n => n.toFixed(0)).join(' ') +
+        '" role="img" aria-label="Mapa del taller por departamentos">' +
+        '<defs>' +
+        '<radialGradient id="luz" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffcf7a" stop-opacity=".95"/>' +
+        '<stop offset="45%" stop-color="#ff9a2e" stop-opacity=".35"/><stop offset="100%" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient>' +
+        '<radialGradient id="lamp" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff2c4"/><stop offset="35%" stop-color="#ffb347" stop-opacity=".85"/>' +
+        '<stop offset="100%" stop-color="#ffb347" stop-opacity="0"/></radialGradient>' +
+        '<filter id="brillo" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/>' +
+        '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+        '</defs>';
+
+      // Suelo general (plataforma)
+      const pl = [iso(-0.25, -0.25), iso(2 * PASO + 1.25, -0.25), iso(2 * PASO + 1.25, 2 * PASO + 1.25), iso(-0.25, 2 * PASO + 1.25)];
+      svg += '<polygon points="' + pl.map(P).join(' ') + '" fill="#141a26" stroke="#232b3b" stroke-width="1.5"/>';
+
+      capaRotulos = [];
+      // Salas, en orden de pintado (de atrás hacia delante)
+      SALAS.slice().sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy)).forEach(s => { svg += dibujarSala(s, depDe(s), res[s.id], todas, pasadasTot, fichadosAhora); });
+
+      // Flujos entre salas y, encima de todo, los rótulos
+      svg += dibujarFlujos(depDe, todas);
+      svg += '<g>' + capaRotulos.join('') + '</g>';
+      svg += '</svg>';
+
+      $app.innerHTML =
+        '<header><h1>Mapa del taller</h1><span class="meta">' + (DEMO ? 'DATOS DE EJEMPLO · ' : '') + 'Actualizado ' + esc(datos.generado) +
+        ' · se refresca solo</span><span style="flex:1"></span>' +
+        '<a class="btn" href="panel.html" style="text-decoration:none">Vista de barras</a> ' +
+        '<button class="btn" id="recargar">↻</button>' + (DEMO ? '' : ' <button class="btn" id="salir">Salir</button>') + '</header>' +
+        '<div class="leyenda"><span><i class="sw" style="background:var(--warm);box-shadow:0 0 8px var(--warm)"></i>Sala iluminada = alguien fichado ahora</span>' +
+        '<span><i class="sw" style="background:var(--flow)"></i>Flujo de faenas entre departamentos (animado = faena esperando)</span>' +
+        '<span>Pulsa una sala para ver su trabajo' + (innerWidth < 760 ? ' · desliza el mapa a los lados' : '') + '</span></div>' +
+        '<div class="escena">' + svg + '</div>';
+
+      // En el móvil el mapa se desliza a los lados: se mantiene la posición al refrescar y la primera vez se centra
+      const $esc = document.querySelector('.escena');
+      if (scrollMapa === null) scrollMapa = ($esc.scrollWidth - $esc.clientWidth) / 2;
+      $esc.scrollLeft = scrollMapa;
+      $esc.onscroll = () => { scrollMapa = $esc.scrollLeft; };
+      document.getElementById('recargar').onclick = cargar;
+      const sal = document.getElementById('salir');
+      if (sal) sal.onclick = () => { guardar('panel_clave', null); datos = null; cerrarCajon(); pantallaClave(); };
+      document.querySelectorAll('.sala').forEach(g => {
+        const abrir = () => abrirSala(g.dataset.id, depDe, todas);
+        g.onclick = abrir;
+        g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } };
+        g.onmousemove = ev => { $tip.textContent = g.dataset.tip; $tip.style.display = 'block';
+          $tip.style.left = Math.min(ev.clientX + 14, innerWidth - 270) + 'px'; $tip.style.top = (ev.clientY + 14) + 'px'; };
+        g.onmouseleave = () => { $tip.style.display = 'none'; };
+      });
+      if (salaAbierta) abrirSala(salaAbierta, depDe, todas);
+    }
+
+    function dibujarSala(s, d, r, todas, pasadasTot, fichadosAhora) {
+      const m = 0.06, x0 = s.gx * PASO + m, y0 = s.gy * PASO + m, x1 = s.gx * PASO + 1 - m, y1 = s.gy * PASO + 1 - m;
+      const A = iso(x0, y0), B = iso(x1, y0), C = iso(x1, y1), D = iso(x0, y1);
+      const up = p => ({ x: p.x, y: p.y - ALTO });
+      const cen = iso((x0 + x1) / 2, (y0 + y1) / 2);
+
+      let activo = false, estado, tip, operarios = [];
+      if (s.tipo === 'dep') {
+        activo = !!(r && r.ahora.size);
+        estado = estadoSala(r);
+        operarios = d ? d.operarios : [];
+        tip = s.nombre + '\n' + (r ? r.pend.length + ' faenas · ' + h(r.fich) + ' de ' + h(r.prog) + ' h fichadas\n' +
+          (r.pasadas ? r.pasadas + ' pasadas de horas\n' : '') + (r.ahora.size ? 'Trabajando: ' + [...r.ahora].join(', ') : 'Nadie fichado ahora') : 'Sin datos');
+      } else if (s.id === 'planificacion') {
+        activo = fichadosAhora.size > 0;
+        estado = pasadasTot ? { t: pasadasTot + ' pasadas', c: 'critical' } : { t: 'en orden', c: 'good' };
+        tip = 'Planificación\n' + todas.filter(o => !o.acabada).length + ' faenas en curso\n' + fichadosAhora.size + ' operarios fichados ahora';
+      } else if (s.id === 'comercial') {
+        const ent = proximasEntregas(todas);
+        estado = ent.vencidas.length ? { t: ent.vencidas.length + ' vencidas', c: 'critical' } : { t: ent.proximas.length + ' próximas', c: 'neutral' };
+        tip = 'Comercial\nEntregas en 14 días: ' + ent.proximas.length + '\nVencidas sin terminar: ' + ent.vencidas.length;
+      } else if (s.id === 'entregas') {
+        const listas = otsTerminadas(todas);
+        estado = { t: listas.length + ' listas', c: listas.length ? 'good' : 'neutral' };
+        tip = 'Entregas\nOT con todos los departamentos acabados: ' + listas.length;
+      } else {
+        estado = { t: 'libre', c: 'neutral' }; tip = s.nombre;
+      }
+      const col = { good: '#0ca30c', warning: '#fab219', critical: '#d03b3b', neutral: '#6b7385' }[estado.c];
+      const clic = s.tipo !== 'libre';
+
+      let g = '<g class="sala"' + (clic ? ' tabindex="0" role="button" aria-label="' + esc(s.nombre + ': ' + estado.t) + '"' : '') +
+        ' data-id="' + s.id + '" data-tip="' + esc(tip) + '"' + (clic ? '' : ' style="cursor:default"') + '>';
+      // Suelo
+      g += '<polygon class="suelo" points="' + [A, B, C, D].map(P).join(' ') + '" fill="' + (activo ? '#2a2216' : '#1b2030') + '"/>';
+      if (activo) g += '<ellipse cx="' + cen.x + '" cy="' + cen.y + '" rx="' + TW * 0.36 + '" ry="' + TH * 0.36 + '" fill="url(#luz)"/>';
+      // Paredes del fondo
+      g += '<polygon points="' + [A, B, up(B), up(A)].map(P).join(' ') + '" fill="#252c3c"/>';
+      g += '<polygon points="' + [A, D, up(D), up(A)].map(P).join(' ') + '" fill="#2d3548"/>';
+      // Tira de luz en la pared
+      g += '<line x1="' + up(A).x + '" y1="' + (up(A).y + 8) + '" x2="' + up(B).x + '" y2="' + (up(B).y + 8) + '" stroke="' + (activo ? '#ffd27a' : '#3a4256') + '" stroke-width="2.5"' + (activo ? ' filter="url(#brillo)"' : '') + '/>';
+      g += '<line x1="' + up(A).x + '" y1="' + (up(A).y + 8) + '" x2="' + up(D).x + '" y2="' + (up(D).y + 8) + '" stroke="' + (activo ? '#ffd27a' : '#3a4256') + '" stroke-width="2.5"' + (activo ? ' filter="url(#brillo)"' : '') + '/>';
+      // Cristalera delantera
+      g += '<polyline class="borde" points="' + [B, C, D].map(P).join(' ') + '" fill="none" stroke="#9cc3ff" stroke-opacity=".55" stroke-width="1.6"/>';
+      g += '<polyline points="' + [up(B), up(C), up(D)].map(P).join(' ') + '" fill="none" stroke="#9cc3ff" stroke-opacity=".22" stroke-width="1.2"/>';
+      g += '<line x1="' + C.x + '" y1="' + C.y + '" x2="' + up(C).x + '" y2="' + up(C).y + '" stroke="#9cc3ff" stroke-opacity=".3"/>';
+      g += '<polygon points="' + [A, B, up(B), up(A)].map(P).join(' ') + '" fill="none" stroke="#9cc3ff" stroke-opacity=".35"/>';
+      g += '<polygon points="' + [A, D, up(D), up(A)].map(P).join(' ') + '" fill="none" stroke="#9cc3ff" stroke-opacity=".35"/>';
+
+      // Puestos de trabajo (un puesto por operario)
+      if (s.tipo === 'dep') g += dibujarPuestos(x0, y0, x1, y1, operarios, r ? r.ahora : new Set());
+      else if (s.tipo === 'oficina') g += dibujarMuebleOficina(cen, activo);
+
+      // Rótulo y estado (en la mitad delantera del suelo; se pintan al final, encima de los flujos)
+      const ly = cen.y + TH * 0.17;
+      let r2 = '<text class="lbl rotulo" x="' + cen.x + '" y="' + ly + '" text-anchor="middle" font-size="' + (s.grande ? 17 : 15) + '" fill="#f2f4f8">' + esc(s.nombre) + '</text>';
+      const tw = Math.max(60, estado.t.length * 7 + 18);
+      r2 += '<rect x="' + (cen.x - tw / 2) + '" y="' + (ly + 6) + '" width="' + tw + '" height="17" rx="8.5" fill="#0d1220" stroke="' + col + '" style="pointer-events:none"/>';
+      r2 += '<rect x="' + (cen.x - tw / 2) + '" y="' + (ly + 6) + '" width="' + tw + '" height="17" rx="8.5" fill="' + col + '" fill-opacity=".25" style="pointer-events:none"/>';
+      r2 += '<text x="' + cen.x + '" y="' + (ly + 18.5) + '" text-anchor="middle" font-size="10.5" font-weight="700" fill="#f2f4f8" style="pointer-events:none">' + esc(estado.t) + '</text>';
+      capaRotulos.push(r2);
+      return g + '</g>';
+    }
+
+    function dibujarPuestos(x0, y0, x1, y1, ops, ahora) {
+      if (!ops.length) return '';
+      const n = ops.length, w = x1 - x0, k = 0.16;   // fila de puestos en la mitad trasera
+      const alterna = n >= 4;
+      let g = '';
+      ops.forEach((op, i) => {
+        const t = n === 1 ? 0.5 : 0.12 + 0.76 * i / (n - 1);
+        // punto sobre la diagonal izquierda-derecha de la sala, desplazado hacia el fondo
+        const cx = x0 + w * (0.5 + (t - 0.5) * (1 - 2 * k) - k), cy = y0 + w * (0.5 - (t - 0.5) * (1 - 2 * k) - k);
+        const on = [...ahora].some(a => norm(a) === norm(op));
+        const s = 0.07;
+        const a = iso(cx - s, cy - s), b = iso(cx + s, cy - s), c = iso(cx + s, cy + s), d = iso(cx - s, cy + s);
+        const hgt = 8, u = p => ({ x: p.x, y: p.y - hgt });
+        if (on) g += '<ellipse cx="' + iso(cx, cy).x + '" cy="' + iso(cx, cy).y + '" rx="26" ry="14" fill="url(#lamp)"/>';
+        g += '<polygon points="' + [b, c, u(c), u(b)].map(P).join(' ') + '" fill="#3b2a1c"/>';
+        g += '<polygon points="' + [c, d, u(d), u(c)].map(P).join(' ') + '" fill="#2e2116"/>';
+        g += '<polygon points="' + [u(a), u(b), u(c), u(d)].map(P).join(' ') + '" fill="' + (on ? '#a8743c' : '#5a4330') + '"/>';
+        const pc = iso(cx, cy);
+        g += '<circle cx="' + pc.x + '" cy="' + (pc.y - hgt - 9) + '" r="5" fill="' + (on ? '#ffd27a' : '#566078') + '"' + (on ? ' filter="url(#brillo)"' : '') + '/>';
+        const arriba = alterna && i % 2 === 1;
+        g += '<text class="op-lbl" x="' + pc.x + '" y="' + (arriba ? pc.y - hgt - 18 : pc.y + 13) + '" text-anchor="middle" fill="' + (on ? '#ffe2a8' : '#8d95a8') + '">' +
+          (on ? '▶ ' : '') + esc(op) + '</text>';
+      });
+      return g;
+    }
+
+    function dibujarMuebleOficina(cen, activo) {
+      // Mesa de reuniones
+      const w = 40, hh = 20;
+      return '<ellipse cx="' + cen.x + '" cy="' + (cen.y - 6) + '" rx="' + w + '" ry="' + hh + '" fill="' + (activo ? '#7a5a34' : '#3d3328') + '" stroke="' + (activo ? '#ffcf7a' : '#4a4034') + '"/>' +
+        (activo ? '<circle cx="' + cen.x + '" cy="' + (cen.y - 10) + '" r="7" fill="#ffd27a" filter="url(#brillo)"/>' : '');
+    }
+
+    function centro(s) { return iso(s.gx * PASO + 0.5, s.gy * PASO + 0.5); }
+
+    function dibujarFlujos(depDe, todas) {
+      const sala = id => SALAS.find(s => s.id === id);
+      // Ruta real de cada OT: departamentos por los que pasa, en el orden de la hoja Departamentos
+      const ordenDeps = datos.departamentos.map(d => d.nombre);
+      const salaDeDep = nombre => SALAS.find(s => depDe(s) && depDe(s).nombre === nombre);
+      const enlaces = {};
+      const porOT = {};
+      todas.forEach(o => { (porOT[o.ot] = porOT[o.ot] || []).push(o); });
+      Object.keys(porOT).forEach(ot => {
+        const ruta = porOT[ot].slice().sort((a, b) => ordenDeps.indexOf(a.dep) - ordenDeps.indexOf(b.dep));
+        for (let i = 0; i < ruta.length - 1; i++) {
+          const k = ruta[i].dep + '→' + ruta[i + 1].dep;
+          const e = (enlaces[k] = enlaces[k] || { a: ruta[i].dep, b: ruta[i + 1].dep, n: 0, vivo: false });
+          if (!ruta[i + 1].acabada) e.n++;
+          if (/^⏳/.test(ruta[i + 1].situacion || '') || (ruta[i].acabada && !ruta[i + 1].acabada)) e.vivo = true;
+        }
+      });
+      let g = '';
+      const curva = (p, q, alto) => {
+        const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2 - alto;
+        return 'M' + P(p) + ' Q' + mx.toFixed(1) + ',' + my.toFixed(1) + ' ' + P(q);
+      };
+      // Comercial → Planificación → cada departamento (flujo de información)
+      const pl = centro(sala('planificacion'));
+      g += '<path class="flujo vivo" d="' + curva(centro(sala('comercial')), pl, 50) + '" stroke="#b48cff" stroke-width="2" stroke-opacity=".8"/>';
+      SALAS.filter(s => s.tipo === 'dep').forEach(s => {
+        g += '<path class="flujo" d="' + curva(pl, centro(s), 30) + '" stroke="#b48cff" stroke-width="1.2" stroke-opacity=".35"/>';
+      });
+      const ent = sala('entregas');
+      const mont = sala('montaje');
+      if (ent && mont) g += '<path class="flujo" d="' + curva(centro(mont), centro(ent), 40) + '" stroke="#4cc94c" stroke-width="2" stroke-opacity=".6"/>';
+      // Producción: ruta real de las OT entre departamentos
+      Object.keys(enlaces).forEach(k => {
+        const e = enlaces[k];
+        const sa = salaDeDep(e.a), sb = salaDeDep(e.b);
+        if (!sa || !sb || !e.n) return;
+        const w = Math.min(6, 1.5 + e.n * 0.6);
+        g += '<path class="flujo' + (e.vivo ? ' vivo' : '') + '" d="' + curva(centro(sa), centro(sb), 70) +
+          '" stroke="#7fb3ff" stroke-width="' + w.toFixed(1) + '" stroke-opacity="' + (e.vivo ? .95 : .55) + '"/>';
+        const mid = { x: (centro(sa).x + centro(sb).x) / 2, y: (centro(sa).y + centro(sb).y) / 2 - 35 };
+        g += '<circle cx="' + mid.x + '" cy="' + mid.y + '" r="9" fill="#0d1220" stroke="#7fb3ff"/>' +
+          '<text x="' + mid.x + '" y="' + (mid.y + 3.5) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#cfe1ff" style="pointer-events:none">' + e.n + '</text>';
+      });
+      return g;
+    }
+
+    function proximasEntregas(todas) {
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const en14 = new Date(hoy.getTime() + 14 * 86400000);
+      const porOT = {};
+      todas.forEach(o => { (porOT[o.ot] = porOT[o.ot] || []).push(o); });
+      const proximas = [], vencidas = [];
+      Object.keys(porOT).forEach(ot => {
+        const lista = porOT[ot], f = parseFecha(lista[0].entrega);
+        if (!f) return;
+        const hecha = lista.every(o => o.acabada);
+        const item = { ot: ot, cliente: lista[0].cliente, descripcion: lista[0].descripcion, f: f, entrega: lista[0].entrega,
+          ruta: lista.map(o => o.dep + (o.acabada ? ' ✔' : '')).join(' → ') };
+        if (!hecha && f < hoy) vencidas.push(item);
+        else if (!hecha && f <= en14) proximas.push(item);
+      });
+      proximas.sort((a, b) => a.f - b.f); vencidas.sort((a, b) => a.f - b.f);
+      return { proximas: proximas, vencidas: vencidas };
+    }
+
+    function otsTerminadas(todas) {
+      const porOT = {};
+      todas.forEach(o => { (porOT[o.ot] = porOT[o.ot] || []).push(o); });
+      return Object.keys(porOT).filter(ot => porOT[ot].every(o => o.acabada))
+        .map(ot => ({ ot: ot, cliente: porOT[ot][0].cliente, descripcion: porOT[ot][0].descripcion, entrega: porOT[ot][0].entrega,
+          ruta: porOT[ot].map(o => o.dep).join(' → ') }));
+    }
+
+    // ---------- Panel lateral ----------
+    function cerrarCajon() { $cajon.classList.remove('abierto'); salaAbierta = null; }
+    function kpi(t, n, s) { return '<div class="kpi"><div class="t">' + esc(t) + '</div><div class="n">' + esc(n) + '</div><div class="s">' + esc(s || '') + '</div></div>'; }
+
+    function tarjetaOT(o, conDep) {
+      const e = estadoOT(o);
+      const max = Math.max(o.horas || 0, o.fichadas || 0, 0.01);
+      const fill = Math.min(100, (o.fichadas || 0) / max * 100), marca = (o.horas || 0) / max * 100;
+      const col = { good: 'var(--good)', warning: 'var(--warning)', critical: 'var(--critical)', neutral: 'var(--neutral)' }[e.c];
+      const pct = o.horas > 0 ? ' · ' + Math.round(o.fichadas / o.horas * 100) + ' %' : '';
+      return '<div class="ot"><div class="top"><span class="cod">' + esc(o.ot) + '</span>' + (conDep ? '<span class="chip">' + esc(o.dep) + '</span>' : '') +
+        '<span class="est e-' + e.c + '" style="margin-left:auto"><i class="dot"></i>' + e.t + '</span></div>' +
+        '<div class="cli">' + esc(o.cliente) + '</div><div class="desc">' + esc(o.descripcion) + '</div>' +
+        '<div class="barra"><div class="fill" style="width:' + fill + '%;background:' + col + '"></div>' +
+        (o.horas > 0 ? '<div class="marca" style="left:calc(' + marca + '% - 1px)"></div>' : '') + '</div>' +
+        '<div class="nums"><span><b>' + h(o.fichadas) + ' h</b> de ' + h(o.horas) + ' h' + pct + '</span><span>' + (o.fin ? 'Fin ' + esc(o.fin) : '') + '</span></div>' +
+        '<div class="chips">' + o.operarios.map(p => '<span class="chip' + (o.ahora.includes(p.nombre) ? ' on' : '') + '">' +
+          (o.ahora.includes(p.nombre) ? '▶ ' : '') + esc(p.nombre) + ' ' + h(p.horas) + ' h</span>').join('') +
+        o.ahora.filter(n => !o.operarios.some(p => p.nombre === n)).map(n => '<span class="chip on">▶ ' + esc(n) + '</span>').join('') + '</div>' +
+        (o.situacion ? '<div class="sit">' + esc(o.situacion) + (o.entrega ? ' · Entrega ' + esc(o.entrega) : '') + '</div>' : '') + '</div>';
+    }
+
+    function filaEntrega(x) {
+      return '<div class="ot"><div class="top"><span class="cod">' + esc(x.ot) + '</span><span class="sit" style="margin-left:auto">Entrega ' + esc(x.entrega) + '</span></div>' +
+        '<div class="cli">' + esc(x.cliente) + '</div><div class="desc">' + esc(x.descripcion) + '</div><div class="sit">' + esc(x.ruta) + '</div></div>';
+    }
+
+    function abrirSala(id, depDe, todas) {
+      const s = SALAS.find(x => x.id === id);
+      if (!s || s.tipo === 'libre') return;
+      salaAbierta = id;
+      let cuerpo = '', sub = '';
+      if (s.tipo === 'dep') {
+        const d = depDe(s);
+        if (!d) { cuerpo = '<p class="vacio">Este departamento no tiene datos.</p>'; }
+        else {
+          const r = resumenDep(d);
+          sub = d.operarios.length + ' operarios';
+          cuerpo += '<div class="kpis">' + kpi('Faenas pendientes', r.pend.length) + kpi('Trabajando ahora', r.ahora.size, [...r.ahora].join(', ') || 'nadie fichado') +
+            kpi('Horas fichadas', h(r.fich) + ' h', 'de ' + h(r.prog) + ' h programadas') + kpi('Pasadas de horas', r.pasadas, r.justas + (r.justas === 1 ? ' justa' : ' justas')) + '</div>';
+          cuerpo += '<h3>Operarios</h3>' + d.operarios.map(op => {
+            const enCurso = d.ots.filter(o => o.ahora.some(n => norm(n) === norm(op)));
+            const horas = d.ots.reduce((sum, o) => sum + (o.operarios.find(p => norm(p.nombre) === norm(op)) || { horas: 0 }).horas, 0);
+            return '<div class="opr' + (enCurso.length ? ' on' : '') + '"><div class="av">' + esc(op.slice(0, 2).toUpperCase()) + '</div><div><div>' + esc(op) + '</div>' +
+              '<div class="q">' + (enCurso.length ? '▶ Trabajando en ' + enCurso.map(o => o.ot).join(', ') : 'Sin fichar ahora') + '</div></div>' +
+              '<div class="h">' + h(horas) + ' h en faenas activas</div></div>';
+          }).join('');
+          const lista = r.pend.slice().sort((a, b) => (ORDEN[estadoOT(a).c] - ORDEN[estadoOT(b).c]) || (estadoOT(b).r - estadoOT(a).r));
+          cuerpo += '<h3>Flujo de trabajo (' + lista.length + ')</h3>' + (lista.map(o => tarjetaOT(Object.assign({ dep: d.nombre }, o))).join('') || '<p class="vacio">Sin faenas pendientes.</p>');
+        }
+      } else if (s.id === 'planificacion') {
+        const pend = todas.filter(o => !o.acabada);
+        const pasadas = pend.filter(o => estadoOT(o).c === 'critical');
+        const sinHoras = pend.filter(o => !(o.horas > 0));
+        const esperando = pend.filter(o => /^⏳/.test(o.situacion || ''));
+        const ahora = new Set(); todas.forEach(o => o.ahora.forEach(n => ahora.add(n)));
+        sub = 'Visión general de todos los departamentos';
+        cuerpo += '<div class="kpis">' + kpi('Faenas en curso', pend.length) + kpi('Fichados ahora', ahora.size, [...ahora].join(', ')) +
+          kpi('Pasadas de horas', pasadas.length) + kpi('Sin horas programadas', sinHoras.length) + '</div>';
+        cuerpo += '<h3>Pasadas de horas</h3>' + (pasadas.map(o => tarjetaOT(o, true)).join('') || '<p class="vacio">Ninguna.</p>');
+        cuerpo += '<h3>Esperando al departamento anterior</h3>' + (esperando.map(o => tarjetaOT(o, true)).join('') || '<p class="vacio">Ninguna.</p>');
+        cuerpo += '<h3>Sin horas (no se pueden planificar)</h3>' + (sinHoras.map(o => tarjetaOT(o, true)).join('') || '<p class="vacio">Ninguna.</p>');
+      } else if (s.id === 'comercial') {
+        const e = proximasEntregas(todas);
+        sub = 'Fechas de entrega comprometidas';
+        cuerpo += '<div class="kpis">' + kpi('Entregas en 14 días', e.proximas.length) + kpi('Vencidas sin terminar', e.vencidas.length) + '</div>';
+        cuerpo += '<h3>Vencidas sin terminar</h3>' + (e.vencidas.map(filaEntrega).join('') || '<p class="vacio">Ninguna.</p>');
+        cuerpo += '<h3>Próximas entregas</h3>' + (e.proximas.map(filaEntrega).join('') || '<p class="vacio">Ninguna en los próximos 14 días.</p>');
+      } else if (s.id === 'entregas') {
+        const l = otsTerminadas(todas);
+        sub = 'OT con todos sus departamentos acabados';
+        cuerpo += '<div class="kpis">' + kpi('Listas para entregar', l.length) + '</div>' + (l.map(filaEntrega).join('') || '<p class="vacio">Ninguna todavía.</p>');
+      }
+      $cajon.innerHTML = '<div class="cj-head"><div><h2>' + esc(s.nombre) + '</h2><div class="sub">' + esc(sub) + '</div></div>' +
+        '<button class="btn cerrar" id="cerrar" aria-label="Cerrar">✕</button></div><div class="cj-body">' + cuerpo + '</div>';
+      $cajon.classList.add('abierto');
+      document.getElementById('cerrar').onclick = cerrarCajon;
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarCajon(); });
+
+    // ---------- Datos de ejemplo (taller.html?demo) ----------
+    function datosDemo() {
+      const ot = (cod, cli, desc, horas, fich, ops, ahora, extra) => Object.assign({ ot: cod, cliente: cli, descripcion: desc, horas: horas, fichadas: fich,
+        asignado: ops.map(o => o[0]).join(', '), fin: '28/10 12:00', entrega: '30/10/2026', situacion: 'Planificada', acabada: false,
+        operarios: ops.map(o => ({ nombre: o[0], horas: o[1] })), ahora: ahora }, extra || {});
+      return {
+        ok: true, generado: '24/10/2026 17:15',
+        departamentos: [
+          { nombre: 'Fresadora', operarios: ['Ignasi'], ots: [
+            ot('P26-09024', 'Proyectos de imagen', 'Letras corpóreas PVC', 6, 2.5, [['Ignasi', 2.5]], ['Ignasi'], { situacion: '▶ En curso (Ignasi)' }),
+            ot('P26-08059', 'Consul Fortuno', 'Reparación golf', 1, 1, [['Ignasi', 1]], [], { acabada: true, situacion: '✔ Acabada' }) ] },
+          { nombre: 'Taller', operarios: ['Michel', 'Dani'], ots: [
+            ot('P26-08019', 'Especialitats M. Masdeu', 'Rètol façana', 8, 9.2, [['Michel', 5.1], ['Dani', 4.1]], [], { situacion: 'Planificada', entrega: '20/10/2026' }),
+            ot('P26-09022', 'Patino Moreno', 'Retol Ramis', 6, 2, [['Dani', 2]], ['Dani'], { situacion: '▶ En curso (Dani)' }) ] },
+          { nombre: 'Pintura', operarios: ['Ton', 'Angela'], ots: [
+            ot('P26-08059', 'Consul Fortuno', 'Reparación golf', 3, 0, [], [], { situacion: '⏳ Tras Fresadora' }),
+            ot('P26-02198', 'Aspro Ocio', 'Rótulo corpóreo luminoso', 30, 31.9, [['Ton', 16], ['Angela', 15.9]], ['Ton', 'Angela'], { situacion: '▶ En curso (Ton y Angela)' }),
+            ot('P26-06010', 'Cal Tino Serveis', 'Retolació Ford Transit', 13, 11.9, [['Angela', 11.9]], [], { entrega: '27/10/2026' }),
+            ot('P26-09061', 'Solé Montada', 'Reparació Dacia', 4, 0, [], []) ] },
+          { nombre: 'Rotulación', operarios: ['Montse Noia', 'Montse Lino', 'Jordi', 'Zoe'], ots: [
+            ot('P26-02012', 'Fundació Privada', 'Retolació 7 vehicles', 10, 3.4, [['Jordi', 3.4]], ['Jordi'], { situacion: '▶ En curso (Jordi)' }),
+            ot('P26-06174', 'Domingo Roige', 'Restauració rètol', 5, 0, [], [], { situacion: '⏳ Tras Pintura', entrega: '29/10/2026' }),
+            ot('P25-11178', 'Agència Catalana', 'Rètols senyalització', 5, 0, [], [], { horas: 0, situacion: '⚠ Faltan las horas' }) ] },
+          { nombre: 'Montaje', operarios: ['Quim', 'Didac', 'Samu'], ots: [
+            ot('P26-07078', 'Proyectos de imagen', 'Riu Palace Jamaica', 3, 1, [['Quim', 1]], [], {}),
+            ot('P26-06174', 'Domingo Roige', 'Restauració rètol', 8, 0, [], [], { situacion: '⏳ Tras Rotulación', entrega: '29/10/2026' }),
+            ot('P26-05040', 'Ajuntament de Vilafranca', 'Cabina policarbonat', 6, 6, [['Didac', 3], ['Samu', 3]], [], { acabada: true, situacion: '✔ Acabada' }) ] }
+        ]
+      };
+    }
+
+    cargar();
+  </script>
+</body>
+</html>

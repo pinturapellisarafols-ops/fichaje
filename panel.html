@@ -169,7 +169,7 @@
 
       let html = '<header><h1>Panel de faenas</h1><span class="meta">Actualizado ' + esc(datos.generado) +
         ' · se refresca solo</span><span style="flex:1"></span>' +
-        '<button class="btn" id="recargar">↻ Actualizar</button> <button class="btn" id="salir">Salir</button></header>';
+        '<a class="btn" href="taller.html" style="text-decoration:none">🏭 Mapa del taller</a> <button class="btn" id="recargar">↻ Actualizar</button> <button class="btn" id="salir">Salir</button></header>';
 
       html += '<div class="resumen">' +
         tile('Faenas en curso', todasOts.filter(o => !o.acabada).length, 'en ' + deps.length + ' departamentos') +
