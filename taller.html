@@ -35,6 +35,28 @@
     .sala .suelo { transition: filter .2s; }
     .sala:hover .suelo, .sala:focus .suelo { filter: brightness(1.35); }
     .sala:focus .borde { stroke: #ffffff; stroke-width: 2.5; }
+    /* Zoom sobre una sala */
+    .sala, .rot { transition: opacity .35s ease, transform .35s ease; }
+    .flujo { transition: opacity .35s ease; }
+    svg#mapa.enfocado .sala:not(.sel), svg#mapa.enfocado .rot:not(.sel) { opacity: .14; }
+    svg#mapa.enfocado .flujo { opacity: .06; }
+    svg#mapa.enfocado .sala.sel, svg#mapa.enfocado .rot.sel { transform: translateY(-8px); }
+    svg#mapa.enfocado .sala.sel .borde { stroke: #ffffff; stroke-opacity: .9; stroke-width: 2.2; }
+    .volver { position: fixed; left: 16px; top: 14px; z-index: 25; display: none; }
+    body.zoom .volver { display: inline-block; }
+    body.zoom header, body.zoom .leyenda { visibility: hidden; }
+    .tot { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+    .tot div { background: var(--bg-2); border-radius: 8px; padding: 6px 8px; }
+    .tot b { display: block; font-size: 15px; }
+    .tot span { color: var(--muted); font-size: 11px; }
+    .opr { flex-wrap: wrap; }
+    .opr .tot { flex-basis: 100%; }
+    .hecha { display: flex; gap: 10px; align-items: center; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 6px; }
+    .hecha .txt { min-width: 0; flex: 1; }
+    .hecha .tiempo { text-align: right; white-space: nowrap; font-size: 12px; color: var(--text-2); }
+    .hecha .dif { font-weight: 700; }
+    .dif.mas { color: var(--critical-t); } .dif.menos { color: var(--good-t); }
     .flujo { fill: none; stroke-linecap: round; pointer-events: none; }
     .flujo.vivo { stroke-dasharray: 6 8; animation: corre 1.4s linear infinite; }
     @keyframes corre { to { stroke-dashoffset: -28; } }
@@ -93,10 +115,12 @@
     .login .btn { width: 100%; padding: 12px; font-size: 16px; background: #2a78d6; border: none; }
     .error { color: var(--critical-t); font-weight: 600; margin-top: 10px; min-height: 18px; }
     @media (max-width: 700px) {
-      #cajon { top: auto; bottom: 0; height: 78%; width: 100%; border-left: none; border-top: 1px solid var(--border);
+      #cajon { top: auto; bottom: 0; height: 62%; width: 100%; border-left: none; border-top: 1px solid var(--border);
         border-radius: 16px 16px 0 0; transform: translateY(105%); }
       #cajon.abierto { transform: none; }
       svg#mapa { max-height: none; }
+      body.zoom .escena { position: fixed; left: 0; right: 0; top: 0; height: 38vh; overflow: hidden; z-index: 5; }
+      body.zoom svg#mapa { min-width: 0; height: 100%; }
     }
   </style>
 </head>
@@ -104,6 +128,7 @@
   <div id="app"></div>
   <div id="tip"></div>
   <aside id="cajon" aria-live="polite"></aside>
+  <button class="btn volver" id="volver">← Volver al mapa</button>
 
   <script>
     // Misma dirección del script que la página de fichaje y el panel.
@@ -116,7 +141,7 @@
     const h = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 });
     const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-    let datos = null, salaAbierta = null, temporizador = null, capaRotulos = [], scrollMapa = null;
+    let datos = null, vbFull = null, vbActual = null, animVista = 0, salaAbierta = null, temporizador = null, capaRotulos = [], scrollMapa = null;
 
     // ---------- Distribución de las salas (cuadrícula isométrica) ----------
     // Producción en el sentido de la ruta: Fresadora → Taller → Pintura → Rotulación → Montaje
@@ -241,6 +266,7 @@
       SALAS.forEach(s => { const x = s.gx * PASO, y = s.gy * PASO; [[0, 0], [1, 0], [1, 1], [0, 1]].forEach(([a, b]) => pts.push(iso(x + a, y + b))); });
       const minX = Math.min(...pts.map(p => p.x)) - 40, maxX = Math.max(...pts.map(p => p.x)) + 40;
       const minY = Math.min(...pts.map(p => p.y)) - ALTO - 70, maxY = Math.max(...pts.map(p => p.y)) + 70;
+      vbFull = [minX, minY, maxX - minX, maxY - minY];
 
       let svg = '<svg id="mapa" viewBox="' + [minX, minY, maxX - minX, maxY - minY].map(n => n.toFixed(0)).join(' ') +
         '" role="img" aria-label="Mapa del taller por departamentos">' +
@@ -292,7 +318,11 @@
           $tip.style.left = Math.min(ev.clientX + 14, innerWidth - 270) + 'px'; $tip.style.top = (ev.clientY + 14) + 'px'; };
         g.onmouseleave = () => { $tip.style.display = 'none'; };
       });
-      if (salaAbierta) abrirSala(salaAbierta, depDe, todas);
+      // Pulsar fuera de las salas cuando hay zoom = volver al mapa
+      document.getElementById('mapa').addEventListener('click', ev => { if (salaAbierta && !ev.target.closest('.sala')) cerrarCajon(); });
+      document.getElementById('volver').onclick = cerrarCajon;
+      vbActual = null;
+      if (salaAbierta) abrirSala(salaAbierta, depDe, todas, true);
     }
 
     function dibujarSala(s, d, r, todas, pasadasTot, fichadosAhora) {
@@ -355,7 +385,7 @@
       r2 += '<rect x="' + (cen.x - tw / 2) + '" y="' + (ly + 6) + '" width="' + tw + '" height="17" rx="8.5" fill="#0d1220" stroke="' + col + '" style="pointer-events:none"/>';
       r2 += '<rect x="' + (cen.x - tw / 2) + '" y="' + (ly + 6) + '" width="' + tw + '" height="17" rx="8.5" fill="' + col + '" fill-opacity=".25" style="pointer-events:none"/>';
       r2 += '<text x="' + cen.x + '" y="' + (ly + 18.5) + '" text-anchor="middle" font-size="10.5" font-weight="700" fill="#f2f4f8" style="pointer-events:none">' + esc(estado.t) + '</text>';
-      capaRotulos.push(r2);
+      capaRotulos.push('<g class="rot" data-id="' + s.id + '">' + r2 + '</g>');
       return g + '</g>';
     }
 
@@ -468,7 +498,64 @@
     }
 
     // ---------- Panel lateral ----------
-    function cerrarCajon() { $cajon.classList.remove('abierto'); salaAbierta = null; }
+    // ---------- Zoom de cámara sobre una sala ----------
+    function cajaSala(s) {
+      const x = s.gx * PASO, y = s.gy * PASO;
+      const A = iso(x, y), B = iso(x + 1, y), C = iso(x + 1, y + 1), D = iso(x, y + 1);
+      return { x0: D.x - 12, x1: B.x + 12, y0: A.y - ALTO - 34, y1: C.y + 14 };
+    }
+
+    // viewBox con la misma proporción que el mapa completo, con la sala centrada en la parte que queda visible
+    function vistaSala(s) {
+      const svg = document.getElementById('mapa');
+      if (!svg || !vbFull) return vbFull;
+      const R = svg.getBoundingClientRect();
+      // Zona visible: dentro del mapa y de la ventana, sin el panel (a la derecha en PC, abajo en el móvil)
+      const V = { l: Math.max(R.left, 0), t: Math.max(R.top, 0), r: Math.min(R.right, innerWidth), b: Math.min(R.bottom, innerHeight) };
+      if (innerWidth <= 700) V.b = Math.min(V.b, innerHeight * 0.38); else V.r = Math.min(V.r, innerWidth - Math.min(460, innerWidth));
+      V.t = Math.max(V.t, 50);
+      const vw = Math.max(80, V.r - V.l), vh = Math.max(80, V.b - V.t);
+      const c = cajaSala(s), bw = c.x1 - c.x0, bh = c.y1 - c.y0;
+      const sc = Math.max(bw / (vw * 0.92), bh / (vh * 0.92));            // unidades del dibujo por píxel
+      const cx = (c.x0 + c.x1) / 2, cy = (c.y0 + c.y1) / 2;
+      // viewBox con la proporción real del mapa en pantalla: la sala queda centrada en la zona visible
+      return [cx - ((V.l + V.r) / 2 - R.left) * sc, cy - ((V.t + V.b) / 2 - R.top) * sc, R.width * sc, R.height * sc];
+    }
+
+    function moverVista(destino, animar) {
+      const svg = document.getElementById('mapa');
+      if (!svg || !destino) return;
+      cancelAnimationFrame(animVista);
+      const desde = vbActual || vbFull, t0 = performance.now(), dur = 650;
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const poner = v => { vbActual = v; svg.setAttribute('viewBox', v.map(n => n.toFixed(1)).join(' ')); };
+      if (!animar || reduce) { poner(destino); return; }
+      const paso = ahora => {
+        const t = Math.min(1, (ahora - t0) / dur), e = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        poner(desde.map((a, i) => a + (destino[i] - a) * e));
+        if (t < 1) animVista = requestAnimationFrame(paso);
+      };
+      animVista = requestAnimationFrame(paso);
+    }
+
+    function enfocar(id, animar) {
+      const svg = document.getElementById('mapa');
+      if (!svg) return;
+      document.body.classList.add('zoom');
+      svg.classList.add('enfocado');
+      svg.querySelectorAll('.sala, .rot').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+      if (innerWidth <= 700) window.scrollTo(0, 0);
+      const s = SALAS.find(x => x.id === id);
+      requestAnimationFrame(() => moverVista(vistaSala(s), animar));
+    }
+
+    function cerrarCajon() {
+      $cajon.classList.remove('abierto'); salaAbierta = null;
+      document.body.classList.remove('zoom');
+      const svg = document.getElementById('mapa');
+      if (svg) { svg.classList.remove('enfocado'); svg.querySelectorAll('.sel').forEach(el => el.classList.remove('sel')); }
+      moverVista(vbFull, true);
+    }
     function kpi(t, n, s) { return '<div class="kpi"><div class="t">' + esc(t) + '</div><div class="n">' + esc(n) + '</div><div class="s">' + esc(s || '') + '</div></div>'; }
 
     function tarjetaOT(o, conDep) {
@@ -489,33 +576,58 @@
         (o.situacion ? '<div class="sit">' + esc(o.situacion) + (o.entrega ? ' · Entrega ' + esc(o.entrega) : '') + '</div>' : '') + '</div>';
     }
 
+    function filaHecha(o) {
+      const dif = (o.fichadas || 0) - (o.horas || 0);
+      const difTxt = !(o.horas > 0) ? '' : Math.abs(dif) < 0.01 ? '<span class="dif menos">justo lo previsto</span>' :
+        '<span class="dif ' + (dif > 0 ? 'mas' : 'menos') + '">' + (dif > 0 ? '+' : '') + h(dif) + ' h</span>';
+      return '<div class="hecha"><span class="est e-good"><i class="dot"></i></span><div class="txt"><div class="top"><b>' + esc(o.ot) + '</b> ' +
+        '<span class="cli">' + esc(o.cliente) + '</span></div><div class="desc">' + esc(o.descripcion) + '</div>' +
+        (o.operarios.length ? '<div class="chips">' + o.operarios.map(p => '<span class="chip">' + esc(p.nombre) + ' ' + h(p.horas) + ' h</span>').join('') + '</div>' : '') +
+        '</div><div class="tiempo"><b>' + h(o.fichadas) + ' h</b> de ' + h(o.horas) + ' h<br>' + difTxt + '</div></div>';
+    }
+
     function filaEntrega(x) {
       return '<div class="ot"><div class="top"><span class="cod">' + esc(x.ot) + '</span><span class="sit" style="margin-left:auto">Entrega ' + esc(x.entrega) + '</span></div>' +
         '<div class="cli">' + esc(x.cliente) + '</div><div class="desc">' + esc(x.descripcion) + '</div><div class="sit">' + esc(x.ruta) + '</div></div>';
     }
 
-    function abrirSala(id, depDe, todas) {
+    function abrirSala(id, depDe, todas, sinAnimar) {
       const s = SALAS.find(x => x.id === id);
       if (!s || s.tipo === 'libre') return;
       salaAbierta = id;
+      enfocar(id, !sinAnimar);
       let cuerpo = '', sub = '';
       if (s.tipo === 'dep') {
         const d = depDe(s);
         if (!d) { cuerpo = '<p class="vacio">Este departamento no tiene datos.</p>'; }
         else {
           const r = resumenDep(d);
-          sub = d.operarios.length + ' operarios';
-          cuerpo += '<div class="kpis">' + kpi('Faenas pendientes', r.pend.length) + kpi('Trabajando ahora', r.ahora.size, [...r.ahora].join(', ') || 'nadie fichado') +
-            kpi('Horas fichadas', h(r.fich) + ' h', 'de ' + h(r.prog) + ' h programadas') + kpi('Pasadas de horas', r.pasadas, r.justas + (r.justas === 1 ? ' justa' : ' justas')) + '</div>';
+          const hechas = d.ots.filter(o => o.acabada);
+          const sumH = (l, campo) => l.reduce((t, o) => t + (Number(o[campo]) || 0), 0);
+          const hechasFich = sumH(hechas, 'fichadas'), hechasProg = sumH(hechas, 'horas');
+          const desvio = hechasFich - hechasProg;
+          sub = d.operarios.length + ' operarios · ' + (r.ahora.size ? r.ahora.size + ' trabajando ahora' : 'nadie fichado ahora');
+          cuerpo += '<div class="kpis">' +
+            kpi('Faenas en marcha', r.pend.length, h(r.fich) + ' de ' + h(r.prog) + ' h fichadas') +
+            kpi('Faenas realizadas', hechas.length, h(hechasFich) + ' h fichadas') +
+            kpi('Horas totales', h(r.fich + hechasFich) + ' h', 'fichadas en este departamento') +
+            kpi('Desvío en realizadas', hechas.length ? (desvio > 0 ? '+' : '') + h(desvio) + ' h' : '–',
+              hechas.length ? (desvio > 0 ? 'por encima de lo programado' : 'dentro de lo programado') : 'sin faenas acabadas') + '</div>';
           cuerpo += '<h3>Operarios</h3>' + d.operarios.map(op => {
             const enCurso = d.ots.filter(o => o.ahora.some(n => norm(n) === norm(op)));
-            const horas = d.ots.reduce((sum, o) => sum + (o.operarios.find(p => norm(p.nombre) === norm(op)) || { horas: 0 }).horas, 0);
+            const suyas = l => l.filter(o => o.operarios.some(p => norm(p.nombre) === norm(op)));
+            const horasDe = l => l.reduce((t, o) => t + (o.operarios.find(p => norm(p.nombre) === norm(op)) || { horas: 0 }).horas, 0);
+            const enM = suyas(r.pend), hec = suyas(hechas);
             return '<div class="opr' + (enCurso.length ? ' on' : '') + '"><div class="av">' + esc(op.slice(0, 2).toUpperCase()) + '</div><div><div>' + esc(op) + '</div>' +
               '<div class="q">' + (enCurso.length ? '▶ Trabajando en ' + enCurso.map(o => o.ot).join(', ') : 'Sin fichar ahora') + '</div></div>' +
-              '<div class="h">' + h(horas) + ' h en faenas activas</div></div>';
+              '<div class="h">' + h(horasDe(d.ots)) + ' h en total</div>' +
+              '<div class="tot"><div><b>' + enM.length + '</b><span>en marcha · ' + h(horasDe(enM)) + ' h</span></div>' +
+              '<div><b>' + hec.length + '</b><span>realizadas · ' + h(horasDe(hec)) + ' h</span></div>' +
+              '<div><b>' + h(horasDe(d.ots)) + ' h</b><span>fichadas</span></div></div></div>';
           }).join('');
           const lista = r.pend.slice().sort((a, b) => (ORDEN[estadoOT(a).c] - ORDEN[estadoOT(b).c]) || (estadoOT(b).r - estadoOT(a).r));
-          cuerpo += '<h3>Flujo de trabajo (' + lista.length + ')</h3>' + (lista.map(o => tarjetaOT(Object.assign({ dep: d.nombre }, o))).join('') || '<p class="vacio">Sin faenas pendientes.</p>');
+          cuerpo += '<h3>En marcha (' + lista.length + ')</h3>' + (lista.map(o => tarjetaOT(Object.assign({ dep: d.nombre }, o))).join('') || '<p class="vacio">Sin faenas en marcha.</p>');
+          cuerpo += '<h3>Realizadas (' + hechas.length + ')</h3>' + (hechas.map(filaHecha).join('') || '<p class="vacio">Todavía no hay faenas acabadas.</p>');
         }
       } else if (s.id === 'planificacion') {
         const pend = todas.filter(o => !o.acabada);
