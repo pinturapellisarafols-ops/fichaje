@@ -139,6 +139,7 @@
     const leer = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
     const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const h = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+    const eur = n => (Math.round(Number(n) || 0)).toLocaleString('es-ES') + ' €';
     const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
     let datos = null, vbFull = null, vbActual = null, animVista = 0, salaAbierta = null, temporizador = null, capaRotulos = [], scrollMapa = null;
@@ -154,7 +155,7 @@
       { id: 'entregas', nombre: 'Entregas', gx: 0, gy: 2, tipo: 'oficina' },
       { id: 'montaje', nombre: 'Montaje', gx: 1, gy: 2, tipo: 'dep' },
       { id: 'rotulacion', nombre: 'Rotulación', gx: 2, gy: 2, tipo: 'dep' },
-      { id: 'almacen', nombre: 'Almacén', gx: 0, gy: 1, tipo: 'libre' }
+      { id: 'almacen', nombre: 'Almacén', gx: 0, gy: 1, tipo: 'almacen' }
     ];
     const PASO = 1.4;                // separación entre salas (pasillos)
     const TW = 250, TH = TW / 2;     // tamaño de una baldosa isométrica
@@ -350,6 +351,15 @@
         const listas = otsTerminadas(todas);
         estado = { t: listas.length + ' listas', c: listas.length ? 'good' : 'neutral' };
         tip = 'Entregas\nOT con todos los departamentos acabados: ' + listas.length;
+      } else if (s.tipo === 'almacen') {
+        const a = datos.almacen;
+        if (!a) { estado = { t: 'sin datos', c: 'neutral' }; tip = 'Almacén\nAún no hay hoja Almacén'; }
+        else {
+          const nb = a.bajoMinimo.length;
+          estado = nb ? { t: nb + ' bajo mínimo', c: 'critical' } : (a.materiales ? { t: 'stock ok', c: 'good' } : { t: 'vacío', c: 'neutral' });
+          tip = 'Almacén\n' + a.materiales + ' materiales · ' + eur(a.valor) + '\n' + (nb ? nb + ' por debajo del mínimo' : 'Nada por debajo del mínimo') +
+            (a.ultimoRecuento ? '\nÚltimo recuento: ' + a.ultimoRecuento : '');
+        }
       } else {
         estado = { t: 'libre', c: 'neutral' }; tip = s.nombre;
       }
@@ -377,6 +387,7 @@
       // Puestos de trabajo (un puesto por operario)
       if (s.tipo === 'dep') g += dibujarPuestos(x0, y0, x1, y1, operarios, r ? r.ahora : new Set());
       else if (s.tipo === 'oficina') g += dibujarMuebleOficina(cen, activo);
+      else if (s.tipo === 'almacen') g += dibujarEstanterias(x0, y0, x1, y1, datos.almacen && datos.almacen.bajoMinimo.length);
 
       // Rótulo y estado (en la mitad delantera del suelo; se pintan al final, encima de los flujos)
       const ly = cen.y + TH * 0.17;
@@ -412,6 +423,32 @@
         g += '<text class="op-lbl" x="' + pc.x + '" y="' + (arriba ? pc.y - hgt - 18 : pc.y + 13) + '" text-anchor="middle" fill="' + (on ? '#ffe2a8' : '#8d95a8') + '">' +
           (on ? '▶ ' : '') + esc(op) + '</text>';
       });
+      return g;
+    }
+
+    // Estanterías del almacén: tres módulos junto a las paredes del fondo
+    function dibujarEstanterias(x0, y0, x1, y1, alerta) {
+      const w = x1 - x0;
+      let g = '';
+      const modulo = (cx, cy, sx, sy) => {
+        const a = iso(cx - sx, cy - sy), b = iso(cx + sx, cy - sy), c = iso(cx + sx, cy + sy), d = iso(cx - sx, cy + sy);
+        const H = 30, u = (p, k) => ({ x: p.x, y: p.y - k });
+        let m = '<polygon points="' + [b, c, u(c, H), u(b, H)].map(P).join(' ') + '" fill="#30394d"/>' +
+          '<polygon points="' + [c, d, u(d, H), u(c, H)].map(P).join(' ') + '" fill="#262e40"/>' +
+          '<polygon points="' + [u(a, H), u(b, H), u(c, H), u(d, H)].map(P).join(' ') + '" fill="#3c4760"/>';
+        [8, 16, 24].forEach(k => {   // baldas con material
+          m += '<line x1="' + u(c, k).x + '" y1="' + u(c, k).y + '" x2="' + u(d, k).x + '" y2="' + u(d, k).y + '" stroke="#8a93a8" stroke-width="1.2"/>' +
+            '<line x1="' + u(b, k).x + '" y1="' + u(b, k).y + '" x2="' + u(c, k).x + '" y2="' + u(c, k).y + '" stroke="#6f7890" stroke-width="1.2"/>';
+        });
+        return m;
+      };
+      g += modulo(x0 + w * 0.22, y0 + w * 0.12, w * 0.16, w * 0.06);
+      g += modulo(x0 + w * 0.62, y0 + w * 0.12, w * 0.16, w * 0.06);
+      g += modulo(x0 + w * 0.12, y0 + w * 0.55, w * 0.06, w * 0.16);
+      if (alerta) {
+        const p = iso(x0 + w * 0.42, y0 + w * 0.12);
+        g += '<circle cx="' + p.x + '" cy="' + (p.y - 44) + '" r="6" fill="#ff5a5a" filter="url(#brillo)"><animate attributeName="opacity" values="1;.35;1" dur="1.6s" repeatCount="indefinite"/></circle>';
+      }
       return g;
     }
 
@@ -573,7 +610,8 @@
         '<div class="chips">' + o.operarios.map(p => '<span class="chip' + (o.ahora.includes(p.nombre) ? ' on' : '') + '">' +
           (o.ahora.includes(p.nombre) ? '▶ ' : '') + esc(p.nombre) + ' ' + h(p.horas) + ' h</span>').join('') +
         o.ahora.filter(n => !o.operarios.some(p => p.nombre === n)).map(n => '<span class="chip on">▶ ' + esc(n) + '</span>').join('') + '</div>' +
-        (o.situacion ? '<div class="sit">' + esc(o.situacion) + (o.entrega ? ' · Entrega ' + esc(o.entrega) : '') + '</div>' : '') + '</div>';
+        (o.situacion ? '<div class="sit">' + esc(o.situacion) + (o.entrega ? ' · Entrega ' + esc(o.entrega) : '') + '</div>' : '') +
+        (datos.almacen && datos.almacen.costePorOT && datos.almacen.costePorOT[o.ot] ? '<div class="sit">📦 Material de la OT: ' + eur(datos.almacen.costePorOT[o.ot]) + '</div>' : '') + '</div>';
     }
 
     function filaHecha(o) {
@@ -647,6 +685,33 @@
         cuerpo += '<div class="kpis">' + kpi('Entregas en 14 días', e.proximas.length) + kpi('Vencidas sin terminar', e.vencidas.length) + '</div>';
         cuerpo += '<h3>Vencidas sin terminar</h3>' + (e.vencidas.map(filaEntrega).join('') || '<p class="vacio">Ninguna.</p>');
         cuerpo += '<h3>Próximas entregas</h3>' + (e.proximas.map(filaEntrega).join('') || '<p class="vacio">Ninguna en los próximos 14 días.</p>');
+      } else if (s.tipo === 'almacen') {
+        const a = datos.almacen;
+        sub = 'Material disponible y consumo por OT';
+        if (!a) cuerpo = '<p class="vacio">Aún no hay hoja Almacén. Créala desde Planificador → 📦 Almacén: crear / revisar hojas.</p>';
+        else {
+          cuerpo += '<div class="kpis">' + kpi('Materiales', a.materiales, a.sinContar ? a.sinContar + ' sin contar' : 'todos contados') +
+            kpi('Bajo mínimo', a.bajoMinimo.length, a.bajoMinimo.length ? 'hay que pedir' : 'nada que pedir') +
+            kpi('Valor del almacén', eur(a.valor), 'según coste del Business Central') + kpi('Último recuento', a.ultimoRecuento || '–', '') + '</div>';
+          cuerpo += '<div class="chips" style="margin-bottom:6px"><a class="btn" href="inventario.html" style="text-decoration:none">📋 Abrir inventario</a> ' +
+            '<a class="btn" href="inventario.html?etiquetas" style="text-decoration:none">🏷️ Etiquetas QR</a></div>';
+          cuerpo += '<h3>Para pedir (' + a.bajoMinimo.length + ')</h3>' + (a.bajoMinimo.map(m => '<div class="hecha"><span class="est e-critical"><i class="dot"></i></span>' +
+            '<div class="txt"><div class="top"><b>' + esc(m.descripcion) + '</b></div><div class="desc">' + esc([m.ref, m.familia, m.ubicacion ? 'Ubic. ' + m.ubicacion : ''].filter(Boolean).join(' · ')) + '</div></div>' +
+            '<div class="tiempo"><b>' + h(m.stock) + ' ' + esc(m.unidad) + '</b><br>mín. ' + h(m.minimo) + '</div></div>').join('') || '<p class="vacio">Nada por debajo del mínimo.</p>');
+          const maxV = Math.max(1, ...a.familias.map(f => f.valor));
+          cuerpo += '<h3>Por familia</h3>' + (a.familias.map(f => '<div class="ot"><div class="top"><span class="cod">' + esc(f.familia) + '</span>' +
+            (f.bajo ? '<span class="est e-critical" style="margin-left:auto"><i class="dot"></i>' + f.bajo + ' bajo mínimo</span>' : '') + '</div>' +
+            '<div class="barra"><div class="fill" style="width:' + (f.valor / maxV * 100) + '%;background:var(--flow)"></div></div>' +
+            '<div class="nums"><span>' + f.n + (f.n === 1 ? ' material' : ' materiales') + '</span><span>' + eur(f.valor) + '</span></div></div>').join('') || '<p class="vacio">Sin materiales.</p>');
+          const otInfo = ot => todas.find(o => o.ot === ot);
+          cuerpo += '<h3>Material por OT (últimos 90 días)</h3>' + (a.consumo.map(c => {
+            const o = otInfo(c.ot);
+            return '<div class="ot"><div class="top"><span class="cod">' + esc(c.ot) + '</span><span class="sit" style="margin-left:auto">' + esc(c.ultima) + '</span></div>' +
+              (o ? '<div class="cli">' + esc(o.cliente) + '</div>' : '') +
+              '<div class="chips">' + c.items.map(i => '<span class="chip">' + esc(i.descripcion) + ' · ' + h(i.cantidad) + ' ' + esc(i.unidad) + '</span>').join('') + '</div>' +
+              '<div class="nums"><span></span><span><b>' + eur(c.coste) + '</b></span></div></div>';
+          }).join('') || '<p class="vacio">Todavía no se ha apuntado material a ninguna OT.</p>');
+        }
       } else if (s.id === 'entregas') {
         const l = otsTerminadas(todas);
         sub = 'OT con todos sus departamentos acabados';
@@ -666,6 +731,13 @@
         operarios: ops.map(o => ({ nombre: o[0], horas: o[1] })), ahora: ahora }, extra || {});
       return {
         ok: true, generado: '24/10/2026 17:15',
+        almacen: { materiales: 5, sinContar: 0, valor: 2736.23, ultimoRecuento: '26/10/2026',
+          bajoMinimo: [{ ref: 'EJ-003', descripcion: 'Metacrilato opal 3 mm', familia: 'Metacrilato', stock: 1, minimo: 2, unidad: 'plancha', ubicacion: 'A2' }],
+          familias: [{ familia: 'Metacrilato', n: 2, valor: 1349.9, bajo: 1 }, { familia: 'Chapa aluminio', n: 1, valor: 846.38, bajo: 0 },
+            { familia: 'Vinilo', n: 1, valor: 380, bajo: 0 }, { familia: 'LED', n: 1, valor: 160, bajo: 0 }],
+          consumo: [{ ot: 'P26-02198', coste: 255.4, ultima: '26/10 10:12', items: [{ descripcion: 'Metacrilato transparente 5 mm', unidad: 'plancha', cantidad: 1 },
+            { descripcion: 'Tira LED 24V blanco neutro', unidad: 'm', cantidad: 18 }] }],
+          costePorOT: { 'P26-02198': 255.4 } },
         departamentos: [
           { nombre: 'Fresadora', operarios: ['Ignasi'], ots: [
             ot('P26-09024', 'Proyectos de imagen', 'Letras corpóreas PVC', 6, 2.5, [['Ignasi', 2.5]], ['Ignasi'], { situacion: '▶ En curso (Ignasi)' }),

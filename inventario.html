@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Inventario del almacén</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #f4f6f9; margin: 0; color: #202124; }
+    header { position: sticky; top: 0; z-index: 5; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.06); padding: 12px 16px 10px; }
+    h1 { margin: 0; font-size: 19px; }
+    .sub { color: #5f6368; font-size: 12px; margin-top: 2px; }
+    main { max-width: 760px; margin: 0 auto; padding: 12px 16px 80px; }
+    .fila { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+    .campo { width: 100%; padding: 11px 12px; font-size: 16px; border: 2px solid #dadce0; border-radius: 10px; background: #fff; }
+    .campo:focus { outline: none; border-color: #1a73e8; }
+    .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 2px; -webkit-overflow-scrolling: touch; }
+    .chip { flex: none; border: 1px solid #dadce0; background: #fff; border-radius: 999px; padding: 7px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+    .chip.on { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    .modo { display: flex; background: #e8eaed; border-radius: 10px; padding: 3px; }
+    .modo button { flex: 1; border: none; background: none; padding: 8px 10px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #5f6368; cursor: pointer; }
+    .modo button.on { background: #fff; color: #1a73e8; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .btn { border: none; border-radius: 10px; padding: 11px 14px; font-size: 15px; font-weight: 700; cursor: pointer; background: #1a73e8; color: #fff; }
+    .btn.sec { background: #e8f0fe; color: #1a73e8; }
+    .btn:disabled { background: #dadce0; color: #80868b; }
+    .mat { background: #fff; border-radius: 14px; padding: 12px 14px; margin-top: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-left: 4px solid #dadce0; }
+    .mat.contado { border-left-color: #34a853; }
+    .mat.bajo { border-left-color: #ea4335; }
+    .mat .t { font-weight: 700; font-size: 15px; }
+    .mat .d { color: #5f6368; font-size: 12px; margin-top: 2px; }
+    .mat .stock { font-size: 13px; margin-top: 6px; color: #3c4043; }
+    .mat .stock b { font-size: 15px; }
+    .mat .acc { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .mat .acc .campo { width: 110px; text-align: center; font-size: 18px; padding: 9px; }
+    .mat .acc .ud { color: #5f6368; font-size: 14px; }
+    .mat .acc .btn { margin-left: auto; }
+    .ok { color: #1e8e3e; font-weight: 700; font-size: 13px; margin-top: 6px; }
+    .err { color: #d93025; font-weight: 700; font-size: 13px; margin-top: 6px; }
+    .vacio { color: #5f6368; text-align: center; padding: 30px 10px; }
+    .login { max-width: 360px; margin: 14vh auto; background: #fff; border-radius: 14px; padding: 24px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .login .btn { width: 100%; margin-top: 10px; }
+    .oculto { display: none !important; }
+    dialog { border: none; border-radius: 16px; padding: 0; width: min(520px, 94vw); box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+    dialog form { padding: 18px; }
+    dialog h2 { margin: 0 0 8px; font-size: 18px; }
+    dialog label { display: block; font-size: 12px; color: #5f6368; margin-top: 10px; }
+    .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .etq svg { width: 150px; height: 150px; }
+    .pie { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .resumen { font-size: 13px; color: #3c4043; margin-top: 8px; }
+    /* Etiquetas QR */
+    .etiquetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+    .etq { background: #fff; border: 2px dashed #bdc1c6; border-radius: 12px; padding: 14px; text-align: center; break-inside: avoid; }
+    .etq .qr { display: flex; justify-content: center; margin: 8px 0; }
+    .etq .u { font-size: 30px; font-weight: 800; letter-spacing: .04em; }
+    .etq .n { font-size: 12px; color: #5f6368; }
+    @media print {
+      header, .no-print { display: none !important; }
+      body { background: #fff; }
+      main { padding: 0; max-width: none; }
+      .etq { border-color: #000; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <dialog id="dlgAlta">
+    <form method="dialog" id="formAlta">
+      <h2>＋ Material nuevo</h2>
+      <label>Descripción *</label>
+      <input class="campo" name="descripcion" required placeholder="Metacrilato opal 5 mm">
+      <div class="dos">
+        <div><label>Familia</label><input class="campo" name="familia" list="lFamilias" placeholder="Metacrilato"></div>
+        <div><label>Unidad</label><select class="campo" name="unidad" id="selUnidad"></select></div>
+      </div>
+      <div class="dos" id="medidas">
+        <div><label>Largo (mm)</label><input class="campo" name="largo" inputmode="numeric" placeholder="3050"></div>
+        <div><label>Ancho (mm)</label><input class="campo" name="ancho" inputmode="numeric" placeholder="2030"></div>
+      </div>
+      <div class="dos">
+        <div><label>Ubicación</label><input class="campo" name="ubicacion" list="lUbic" placeholder="A2"></div>
+        <div><label>Cantidad contada</label><input class="campo" name="cantidad" inputmode="decimal" placeholder="0"></div>
+      </div>
+      <div class="dos">
+        <div><label>Stock mínimo</label><input class="campo" name="minimo" inputmode="decimal" placeholder="opcional"></div>
+        <div><label>Referencia BC</label><input class="campo" name="ref" placeholder="opcional"></div>
+      </div>
+      <div class="err" id="altaMsg"></div>
+      <div class="pie">
+        <button class="btn sec" value="cancel" formnovalidate>Cancelar</button>
+        <button class="btn" id="btnAlta" value="ok">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+  <datalist id="lFamilias"></datalist>
+  <datalist id="lUbic"></datalist>
+
+  <script>
+    // Misma dirección del script que la página de fichaje, el panel y el mapa.
+    const API = 'https://script.google.com/macros/s/AKfycbzq594Jk7VnAxM5gFUEt3E2Ui8dChSJ3tp2f7WwtbxPDMVWfArRtBLDFuhBlyOkbYWm/exec';
+    const $app = document.getElementById('app');
+    const P = new URLSearchParams(location.search);
+    const ETIQUETAS = P.has('etiquetas');
+    const leer = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const guardar = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const n2 = n => String(Math.round((Number(n) || 0) * 100) / 100).replace('.', ',');
+    const num = s => parseFloat(String(s == null ? '' : s).replace(',', '.'));
+
+    let datos = null;
+    let ubic = P.get('u') || '';       // ubicación elegida ('' = todas, '-' = sin ubicación)
+    let modo = 'recuento';             // 'recuento' | 'entrada'
+    let filtro = '';
+
+    async function api(cuerpo) {
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify(cuerpo), credentials: 'omit' });
+      if (!r.ok) throw new Error('El servidor no responde (' + r.status + ')');
+      return r.json();
+    }
+
+    function pantallaClave(msg) {
+      $app.innerHTML = '<div class="login"><h1>Inventario del almacén</h1>' +
+        '<p class="sub">Escribe la clave del panel (la misma del mapa del taller).</p>' +
+        '<input id="clave" class="campo" type="password" autocomplete="current-password">' +
+        '<button class="btn" id="entrar">Entrar</button><div class="err">' + esc(msg || '') + '</div></div>';
+      const entrar = () => { guardar('panel_clave', document.getElementById('clave').value); cargar(); };
+      document.getElementById('entrar').onclick = entrar;
+      document.getElementById('clave').onkeydown = e => { if (e.key === 'Enter') entrar(); };
+    }
+
+    async function cargar() {
+      const clave = leer('panel_clave');
+      if (!clave) { pantallaClave(); return; }
+      if (!datos) $app.innerHTML = '<p class="vacio">Cargando…</p>';
+      try {
+        const r = await api({ accion: 'alm_lista', clave: clave });
+        if (!r.ok) { if (r.clave) guardar('panel_clave', null); pantallaClave(r.mensaje || 'No se ha podido cargar.'); return; }
+        datos = r;
+        document.getElementById('lFamilias').innerHTML = r.familias.map(f => '<option value="' + esc(f) + '">').join('');
+        document.getElementById('lUbic').innerHTML = r.ubicaciones.map(f => '<option value="' + esc(f) + '">').join('');
+        document.getElementById('selUnidad').innerHTML = r.unidades.map(u => '<option>' + esc(u) + '</option>').join('');
+        ETIQUETAS ? pintarEtiquetas() : pintar();
+      } catch (e) {
+        $app.innerHTML = '<p class="vacio err">No se puede conectar: ' + esc(e.message) + '</p>';
+      }
+    }
+
+    function quien() {
+      let q = leer('inv_quien');
+      if (!q) { q = (prompt('¿Quién está contando? (tu nombre)') || '').trim(); if (q) guardar('inv_quien', q); }
+      return q || 'Inventario';
+    }
+
+    function visibles() {
+      const palabras = norm(filtro).split(/\s+/).filter(Boolean);
+      return datos.materiales.filter(m => {
+        if (ubic === '-' ? m.ubicacion : (ubic && m.ubicacion !== ubic)) return false;
+        const t = norm([m.descripcion, m.familia, m.ref, m.ubicacion].join(' '));
+        return palabras.every(p => t.includes(p));
+      }).sort((a, b) => (a.ubicacion || '').localeCompare(b.ubicacion || '', 'es', { numeric: true }) ||
+        (a.familia || '').localeCompare(b.familia || '', 'es') || a.descripcion.localeCompare(b.descripcion, 'es'));
+    }
+
+    function pintar() {
+      const contados = datos.materiales.filter(m => m.contado).length;
+      const sinUbic = datos.materiales.some(m => !m.ubicacion);
+      $app.innerHTML =
+        '<header><h1>📦 Inventario del almacén</h1><div class="sub">' + datos.materiales.length + ' materiales · ' + contados + ' contados · contando: ' +
+        esc(leer('inv_quien') || '—') + ' <button class="chip" id="cambiarQuien" style="padding:2px 8px;font-size:12px">cambiar</button></div>' +
+        '<div class="fila"><div class="modo" style="flex:1"><button data-m="recuento" class="' + (modo === 'recuento' ? 'on' : '') + '">Contar</button>' +
+        '<button data-m="entrada" class="' + (modo === 'entrada' ? 'on' : '') + '">Entrada de material</button></div></div>' +
+        '<div class="chips"><button class="chip' + (!ubic ? ' on' : '') + '" data-u="">Todas</button>' +
+        datos.ubicaciones.map(u => '<button class="chip' + (ubic === u ? ' on' : '') + '" data-u="' + esc(u) + '">' + esc(u) + '</button>').join('') +
+        (sinUbic ? '<button class="chip' + (ubic === '-' ? ' on' : '') + '" data-u="-">Sin ubicación</button>' : '') + '</div>' +
+        '<input class="campo" id="filtro" type="search" placeholder="Buscar material…" value="' + esc(filtro) + '" style="margin-top:6px">' +
+        '</header><main><div id="lista"></div>' +
+        '<div class="fila no-print" style="margin-top:18px"><button class="btn" id="nuevo">＋ Material nuevo</button>' +
+        '<a class="btn sec" href="?etiquetas" style="text-decoration:none">🏷️ Etiquetas QR</a>' +
+        '<a class="btn sec" href="taller.html" style="text-decoration:none">🏭 Mapa</a></div></main>';
+      pintarLista();
+      document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { modo = b.dataset.m; pintar(); });
+      document.querySelectorAll('[data-u]').forEach(b => b.onclick = () => {
+        ubic = b.dataset.u; history.replaceState(null, '', ubic ? '?u=' + encodeURIComponent(ubic) : location.pathname); pintar();
+      });
+      document.getElementById('filtro').oninput = e => { filtro = e.target.value; pintarLista(); };
+      document.getElementById('cambiarQuien').onclick = () => { guardar('inv_quien', null); quien(); pintar(); };
+      document.getElementById('nuevo').onclick = abrirAlta;
+    }
+
+    function pintarLista() {
+      const l = visibles();
+      const cont = document.getElementById('lista');
+      if (!l.length) { cont.innerHTML = '<p class="vacio">No hay materiales' + (ubic ? ' en esta ubicación' : '') + (filtro ? ' con esa búsqueda' : '') + '.</p>'; return; }
+      cont.innerHTML = l.map(m => {
+        const i = datos.materiales.indexOf(m);
+        const bajo = m.contado && m.minimo > 0 && m.stock <= m.minimo;
+        const med = m.largo && m.ancho ? m.largo + '×' + m.ancho + ' mm (' + n2(m.m2) + ' m²)' : '';
+        const bc = m.stockBC ? ' · BC: ' + esc(m.stockBC) + ' ' + esc(m.unidadBC) + (m.factor !== 1 && num(m.stockBC) > 0 ? ' ≈ ' + n2(num(m.stockBC) / m.factor) + ' ' + esc(m.unidad) : '') : '';
+        return '<div class="mat' + (bajo ? ' bajo' : m.contado ? ' contado' : '') + '" data-i="' + i + '">' +
+          '<div class="t">' + esc(m.descripcion) + '</div>' +
+          '<div class="d">' + esc([m.ref, m.familia, med, m.ubicacion ? 'Ubic. ' + m.ubicacion : 'Sin ubicación'].filter(Boolean).join(' · ')) + '</div>' +
+          '<div class="stock">Stock: <b>' + (m.contado ? n2(m.stock) + ' ' + esc(m.unidad) : 'sin contar') + '</b>' +
+          (m.minimo ? ' · mínimo ' + n2(m.minimo) : '') + bc + (m.recuento ? ' · contado ' + esc(m.recuento) : '') + '</div>' +
+          '<div class="acc"><input class="campo" inputmode="decimal" placeholder="' + (modo === 'recuento' ? 'Hay' : '+ Llega') + '">' +
+          '<span class="ud">' + esc(m.unidad) + '</span><button class="btn">' + (modo === 'recuento' ? '✓ Guardar' : '+ Sumar') + '</button></div>' +
+          '<div class="res"></div></div>';
+      }).join('');
+      cont.querySelectorAll('.mat').forEach(card => {
+        const inp = card.querySelector('input'), btn = card.querySelector('.btn'), res = card.querySelector('.res');
+        const enviar = async () => {
+          const m = datos.materiales[Number(card.dataset.i)];
+          const q = num(inp.value);
+          if (isNaN(q) || q < 0 || (modo === 'entrada' && !(q > 0))) { res.className = 'res err'; res.textContent = 'Escribe una cantidad.'; inp.focus(); return; }
+          btn.disabled = true; res.className = 'res'; res.textContent = 'Guardando…';
+          try {
+            const r = await api({ accion: modo === 'recuento' ? 'alm_recuento' : 'alm_entrada', clave: leer('panel_clave'), ref: m.ref, cantidad: q, quien: quien() });
+            if (!r.ok) { res.className = 'res err'; res.textContent = r.mensaje; btn.disabled = false; return; }
+            m.stock = r.stock; m.contado = true; if (modo === 'recuento') m.recuento = r.recuento;
+            res.className = 'res ok';
+            res.textContent = modo === 'recuento'
+              ? '✓ Guardado: ' + n2(r.stock) + ' ' + m.unidad + (r.dif !== null && r.dif !== undefined ? (r.dif ? ' (diferencia ' + (r.dif > 0 ? '+' : '') + n2(r.dif) + ')' : ' (cuadra)') : ' (primer recuento)')
+              : '✓ Sumado. Ahora hay ' + n2(r.stock) + ' ' + m.unidad;
+            inp.value = '';
+            card.className = 'mat ' + (m.minimo > 0 && m.stock <= m.minimo ? 'bajo' : 'contado');
+            card.querySelector('.stock b').textContent = n2(m.stock) + ' ' + m.unidad;
+          } catch (e) { res.className = 'res err'; res.textContent = 'Error: ' + e.message; }
+          btn.disabled = false;
+        };
+        btn.onclick = enviar;
+        inp.onkeydown = e => { if (e.key === 'Enter') enviar(); };
+      });
+    }
+
+    // ---- Alta de material nuevo ----
+    const dlg = document.getElementById('dlgAlta'), form = document.getElementById('formAlta');
+    function abrirAlta() {
+      form.reset();
+      document.getElementById('altaMsg').textContent = '';
+      if (ubic && ubic !== '-') form.ubicacion.value = ubic;
+      form.unidad.value = 'plancha';
+      document.getElementById('medidas').classList.remove('oculto');
+      dlg.showModal();
+    }
+    form.unidad.onchange = () => document.getElementById('medidas').classList.toggle('oculto', form.unidad.value !== 'plancha');
+    document.getElementById('btnAlta').onclick = async ev => {
+      ev.preventDefault();
+      if (!form.descripcion.value.trim()) { document.getElementById('altaMsg').textContent = 'Falta la descripción.'; return; }
+      const d = Object.fromEntries(new FormData(form).entries());
+      document.getElementById('btnAlta').disabled = true;
+      try {
+        const r = await api(Object.assign(d, { accion: 'alm_alta', clave: leer('panel_clave'), quien: quien() }));
+        if (!r.ok) { document.getElementById('altaMsg').textContent = r.mensaje; }
+        else { dlg.close(); datos = null; await cargar(); }
+      } catch (e) { document.getElementById('altaMsg').textContent = 'Error: ' + e.message; }
+      document.getElementById('btnAlta').disabled = false;
+    };
+
+    // ---- Etiquetas QR por ubicación (para imprimir) ----
+    function pintarEtiquetas() {
+      const base = location.origin + location.pathname;
+      const lista = datos.ubicaciones.length ? datos.ubicaciones : [];
+      $app.innerHTML = '<header class="no-print"><h1>🏷️ Etiquetas QR de las ubicaciones</h1>' +
+        '<div class="sub">Imprime y pega cada etiqueta en su estantería. Al escanearla se abre el inventario de esa ubicación.</div>' +
+        '<div class="fila"><input class="campo" id="extra" placeholder="Añadir ubicaciones: A1, A2, B1…">' +
+        '<button class="btn" id="anadir">Añadir</button><button class="btn sec" onclick="window.print()">🖨️ Imprimir</button>' +
+        '<a class="btn sec" href="inventario.html" style="text-decoration:none">← Volver</a></div></header>' +
+        '<main><div class="etiquetas" id="etqs"></div></main>';
+      let todas = lista.slice();
+      const dibujar = () => {
+        const cont = document.getElementById('etqs');
+        cont.innerHTML = todas.map((u, i) => {
+          const n = datos.materiales.filter(m => m.ubicacion === u).length;
+          return '<div class="etq"><div class="n">ALMACÉN</div><div class="qr" id="qr' + i + '"></div><div class="u">' + esc(u) + '</div>' +
+            '<div class="n">' + (n ? n + (n === 1 ? ' material' : ' materiales') : '') + '</div></div>';
+        }).join('') || '<p class="vacio">Aún no hay ubicaciones. Escríbelas arriba (por ejemplo A1, A2, B1) o ponlas en la columna H de la hoja Almacén.</p>';
+        todas.forEach((u, i) => {
+          const qr = qrcode(0, 'M');
+          qr.addData(base + '?u=' + encodeURIComponent(u));
+          qr.make();
+          document.getElementById('qr' + i).innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
+        });
+      };
+      document.getElementById('anadir').onclick = () => {
+        document.getElementById('extra').value.split(/[,;\s]+/).map(x => x.trim()).filter(x => x && !todas.includes(x)).forEach(x => todas.push(x));
+        document.getElementById('extra').value = '';
+        dibujar();
+      };
+      if (window.qrcode) dibujar();
+      else {
+        const s = document.createElement('script');
+        s.src = 'qrcode.js';   // generador de QR (MIT, Kazuhiko Arase), en el mismo sitio
+        s.onload = dibujar;
+        s.onerror = () => { document.getElementById('etqs').innerHTML = '<p class="vacio err">No se ha podido cargar el generador de QR.</p>'; };
+        document.head.appendChild(s);
+      }
+    }
+
+    cargar();
+  </script>
+</body>
+</html>

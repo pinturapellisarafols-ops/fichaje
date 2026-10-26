@@ -33,6 +33,25 @@
     .btn-foto { background: #1a73e8; color: white; }
     .btn-galeria { background: #e8f0fe; color: #1a73e8; font-size: 16px; padding: 12px; }
     #fotosMsg { margin-top: 10px; font-size: 14px; font-weight: bold; min-height: 18px; }
+    .campo { width: 100%; padding: 12px; font-size: 16px; border: 2px solid #dadce0; border-radius: 12px; margin-top: 6px; }
+    .campo:focus { outline: none; border-color: #1a73e8; }
+    .lista-mat { margin-top: 6px; }
+    .op-mat { display: block; width: 100%; text-align: left; background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 10px;
+      padding: 10px 12px; margin-top: 6px; font-size: 15px; cursor: pointer; color: #202124; }
+    .op-mat small { display: block; color: #5f6368; font-size: 12px; margin-top: 2px; }
+    .mat-sel { background: #e8f0fe; border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
+    .mat-sel b { display: block; font-size: 15px; color: #202124; }
+    .mat-sel span { font-size: 12px; color: #5f6368; }
+    .cant { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+    .btn-cant { flex: none; border: 1px solid #dadce0; background: #fff; border-radius: 10px; padding: 10px 12px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .btn-cant.on { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    .cant .campo { margin-top: 0; text-align: center; font-size: 18px; }
+    .cant .ud { color: #5f6368; font-size: 14px; white-space: nowrap; }
+    .btn-mat { background: #f29900; color: white; }
+    .enlace { background: none; border: none; color: #1a73e8; font-size: 14px; padding: 8px 0; cursor: pointer; }
+    #matMsg { margin-top: 10px; font-size: 14px; font-weight: bold; min-height: 18px; }
+    .usados { margin-top: 10px; font-size: 13px; color: #3c4043; }
+    .usados div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid #f1f3f4; }
   </style>
 </head>
 <body>
@@ -76,6 +95,29 @@
       <input id="fotoGaleria" class="oculto" type="file" accept="image/*" multiple>
       <div id="fotosMsg"></div>
     </div>
+
+    <!-- Material del almacén usado en esta OT -->
+    <div id="panelMaterial" class="fotos oculto">
+      <h3>📦 Material del almacén</h3>
+      <p class="ayuda">Apunta lo que coges para esta OT. Escribe tu PIN arriba.</p>
+      <input id="buscaMat" class="campo" type="search" placeholder="Buscar: metacrilato 5, aluminio, led…" autocomplete="off">
+      <div id="listaMat" class="lista-mat"></div>
+      <div id="matElegido" class="oculto">
+        <div class="mat-sel"><b id="matNombre"></b><span id="matInfo"></span></div>
+        <div class="cant">
+          <button type="button" class="btn-cant" data-q="0.25">¼</button>
+          <button type="button" class="btn-cant" data-q="0.5">½</button>
+          <button type="button" class="btn-cant" data-q="1">1</button>
+          <button type="button" class="btn-cant" data-q="2">2</button>
+          <input id="cantMat" class="campo" inputmode="decimal" placeholder="Cant.">
+          <span class="ud" id="matUnidad"></span>
+        </div>
+        <button id="btnMat" class="btn btn-mat">📦 APUNTAR MATERIAL</button>
+        <button id="otroMat" class="enlace" type="button">Elegir otro material</button>
+      </div>
+      <div id="matMsg"></div>
+      <div id="matUsados" class="usados"></div>
+    </div>
   </div>
 
   <script>
@@ -104,6 +146,8 @@
       $('panelCrear').classList.add('oculto');
       $('panelFichar').classList.remove('oculto');
       $('panelFotos').classList.remove('oculto');
+      $('panelMaterial').classList.remove('oculto');
+      cargarMateriales();
       botones();
     }
 
@@ -206,6 +250,86 @@
     }
     $('fotoCamara').addEventListener('change', function () { subirFotos(this); });
     $('fotoGaleria').addEventListener('change', function () { subirFotos(this); });
+
+    // ---- Material del almacén: se busca, se elige y se apunta a esta OT ----
+    let materiales = [], matSel = null;
+    const normT = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const fmtN = n => String(Math.round((Number(n) || 0) * 100) / 100).replace('.', ',');
+    function msgMat(texto, clase) { $('matMsg').innerText = texto; $('matMsg').className = clase || ''; }
+
+    function pintarUsados(usados) {
+      if (!usados || !usados.length) { $('matUsados').innerHTML = ''; return; }
+      $('matUsados').innerHTML = '<b>Ya apuntado en esta OT:</b>' + usados.map(u =>
+        '<div><span>' + escH(u.descripcion) + '</span><span>' + fmtN(u.cantidad) + ' ' + escH(u.unidad) + '</span></div>').join('');
+    }
+    function escH(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    async function cargarMateriales() {
+      try {
+        const r = await api({ accion: 'materiales', operario: operario, ot: ot });
+        if (!r.ok) return;
+        materiales = r.materiales || [];
+        pintarUsados(r.usados);
+        if (!materiales.length) $('panelMaterial').classList.add('oculto');
+      } catch (e) { /* sin conexión: el panel queda sin lista */ }
+    }
+
+    function buscarMat() {
+      const palabras = normT($('buscaMat').value).split(/\s+/).filter(Boolean);
+      if (!palabras.length) { $('listaMat').innerHTML = ''; return; }
+      const res = materiales.filter(m => {
+        const t = normT([m.descripcion, m.familia, m.ref, m.medidas, m.ubicacion].join(' '));
+        return palabras.every(p => t.includes(p));
+      }).slice(0, 8);
+      $('listaMat').innerHTML = res.length ? res.map((m, i) => '<button type="button" class="op-mat" data-i="' + materiales.indexOf(m) + '">' +
+        escH(m.descripcion) + '<small>' + escH([m.familia, m.medidas, m.ubicacion ? 'Ubic. ' + m.ubicacion : '', 'Quedan ' + fmtN(m.stock) + ' ' + m.unidad].filter(Boolean).join(' · ')) +
+        '</small></button>').join('') : '<p class="ayuda">No encuentro ese material. Avisa al responsable para darlo de alta.</p>';
+    }
+    $('buscaMat').addEventListener('input', buscarMat);
+    $('listaMat').addEventListener('click', e => {
+      const b = e.target.closest('.op-mat');
+      if (!b) return;
+      matSel = materiales[Number(b.dataset.i)];
+      $('matNombre').innerText = matSel.descripcion;
+      $('matInfo').innerText = [matSel.medidas, matSel.ubicacion ? 'Ubicación ' + matSel.ubicacion : '', 'Quedan ' + fmtN(matSel.stock) + ' ' + matSel.unidad].filter(Boolean).join(' · ');
+      $('matUnidad').innerText = matSel.unidad;
+      $('cantMat').value = '';
+      document.querySelectorAll('.btn-cant').forEach(x => x.classList.remove('on'));
+      $('matElegido').classList.remove('oculto');
+      $('listaMat').innerHTML = ''; $('buscaMat').value = '';
+      $('buscaMat').classList.add('oculto');
+      msgMat('');
+    });
+    $('otroMat').addEventListener('click', () => {
+      matSel = null; $('matElegido').classList.add('oculto'); $('buscaMat').classList.remove('oculto'); $('buscaMat').focus();
+    });
+    document.querySelectorAll('.btn-cant').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('.btn-cant').forEach(x => x.classList.remove('on'));
+      b.classList.add('on'); $('cantMat').value = b.dataset.q.replace('.', ',');
+    }));
+    $('cantMat').addEventListener('input', () => document.querySelectorAll('.btn-cant').forEach(x => x.classList.remove('on')));
+
+    $('btnMat').addEventListener('click', async () => {
+      if (!matSel) return;
+      const pin = $('pin').value;
+      if (!/^\d{4}$/.test(pin)) { msgMat('Escribe primero tu PIN de 4 cifras.', 'error'); $('pin').focus(); return; }
+      const q = parseFloat(String($('cantMat').value).replace(',', '.'));
+      if (!(q > 0)) { msgMat('Elige o escribe la cantidad.', 'error'); return; }
+      $('btnMat').disabled = true;
+      msgMat('Guardando...');
+      try {
+        const r = await api({ accion: 'salidaMaterial', operario: operario, ot: ot, pin: pin, ref: matSel.ref, cantidad: q });
+        msgMat((r.ok ? '✅ ' : '') + r.mensaje, r.ok ? 'success' : 'error');
+        if (r.ok) {
+          matSel.stock = Math.round((matSel.stock - q) * 1000) / 1000;
+          pintarUsados(r.usados);
+          matSel = null; $('matElegido').classList.add('oculto'); $('buscaMat').classList.remove('oculto');
+        }
+      } catch (e) {
+        msgMat('Error: ' + e.message + '. Vuelve a intentarlo.', 'error');
+      }
+      $('btnMat').disabled = false;
+    });
 
     cargar();
   </script>
