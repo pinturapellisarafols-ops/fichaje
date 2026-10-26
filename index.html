@@ -49,6 +49,16 @@
     .cant .ud { color: #5f6368; font-size: 14px; white-space: nowrap; }
     .btn-mat { background: #f29900; color: white; }
     .enlace { background: none; border: none; color: #1a73e8; font-size: 14px; padding: 8px 0; cursor: pointer; }
+    .busca { display: flex; gap: 6px; margin-top: 6px; }
+    .busca .campo { margin-top: 0; }
+    .btn-qr { flex: none; border: none; border-radius: 12px; background: #202124; color: #fff; font-size: 15px; font-weight: bold; padding: 0 14px; cursor: pointer; }
+    .tit-lista { font-size: 13px; color: #5f6368; margin: 10px 0 0; }
+    #escaner { position: fixed; inset: 0; background: #000; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #escaner.oculto { display: none; }
+    #escaner video { width: 100%; max-height: 75vh; object-fit: cover; }
+    #escaner .marco { position: absolute; width: 62vmin; height: 62vmin; border: 3px solid #fff; border-radius: 18px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35); pointer-events: none; }
+    #escaner .txt { color: #fff; font-size: 15px; margin: 14px 16px 8px; text-align: center; }
+    #escaner button { background: #fff; color: #202124; border: none; border-radius: 12px; padding: 12px 22px; font-size: 16px; font-weight: bold; }
     #matMsg { margin-top: 10px; font-size: 14px; font-weight: bold; min-height: 18px; }
     .usados { margin-top: 10px; font-size: 13px; color: #3c4043; }
     .usados div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid #f1f3f4; }
@@ -100,7 +110,10 @@
     <div id="panelMaterial" class="fotos oculto">
       <h3>📦 Material del almacén</h3>
       <p class="ayuda">Apunta lo que coges para esta OT. Escribe tu PIN arriba.</p>
-      <input id="buscaMat" class="campo" type="search" placeholder="Buscar: metacrilato 5, aluminio, led…" autocomplete="off">
+      <div class="busca" id="cajaBusca">
+        <input id="buscaMat" class="campo" type="search" placeholder="Buscar: metacrilato 5, led…" autocomplete="off">
+        <button type="button" class="btn-qr" id="btnQR" aria-label="Escanear código QR">📷 QR</button>
+      </div>
       <div id="listaMat" class="lista-mat"></div>
       <div id="matElegido" class="oculto">
         <div class="mat-sel"><b id="matNombre"></b><span id="matInfo"></span></div>
@@ -118,6 +131,13 @@
       <div id="matMsg"></div>
       <div id="matUsados" class="usados"></div>
     </div>
+  </div>
+
+  <div id="escaner" class="oculto">
+    <video id="video" playsinline muted></video>
+    <div class="marco"></div>
+    <div class="txt" id="escTxt">Apunta al código QR de la estantería o del material</div>
+    <button type="button" id="cerrarQR">Cancelar</button>
   </div>
 
   <script>
@@ -281,15 +301,20 @@
         const t = normT([m.descripcion, m.familia, m.ref, m.medidas, m.ubicacion].join(' '));
         return palabras.every(p => t.includes(p));
       }).slice(0, 8);
-      $('listaMat').innerHTML = res.length ? res.map((m, i) => '<button type="button" class="op-mat" data-i="' + materiales.indexOf(m) + '">' +
+      pintarOpciones(res, '', 'No encuentro ese material. Avisa al responsable para darlo de alta.');
+    }
+    function pintarOpciones(res, titulo, vacio) {
+      $('listaMat').innerHTML = (titulo ? '<p class="tit-lista">' + escH(titulo) + '</p>' : '') + (res.length ? res.map(m => '<button type="button" class="op-mat" data-i="' + materiales.indexOf(m) + '">' +
         escH(m.descripcion) + '<small>' + escH([m.familia, m.medidas, m.ubicacion ? 'Ubic. ' + m.ubicacion : '', 'Quedan ' + fmtN(m.stock) + ' ' + m.unidad].filter(Boolean).join(' · ')) +
-        '</small></button>').join('') : '<p class="ayuda">No encuentro ese material. Avisa al responsable para darlo de alta.</p>';
+        '</small></button>').join('') : '<p class="ayuda">' + escH(vacio) + '</p>');
     }
     $('buscaMat').addEventListener('input', buscarMat);
     $('listaMat').addEventListener('click', e => {
       const b = e.target.closest('.op-mat');
-      if (!b) return;
-      matSel = materiales[Number(b.dataset.i)];
+      if (b) elegirMat(materiales[Number(b.dataset.i)]);
+    });
+    function elegirMat(m) {
+      matSel = m;
       $('matNombre').innerText = matSel.descripcion;
       $('matInfo').innerText = [matSel.medidas, matSel.ubicacion ? 'Ubicación ' + matSel.ubicacion : '', 'Quedan ' + fmtN(matSel.stock) + ' ' + matSel.unidad].filter(Boolean).join(' · ');
       $('matUnidad').innerText = matSel.unidad;
@@ -297,12 +322,87 @@
       document.querySelectorAll('.btn-cant').forEach(x => x.classList.remove('on'));
       $('matElegido').classList.remove('oculto');
       $('listaMat').innerHTML = ''; $('buscaMat').value = '';
-      $('buscaMat').classList.add('oculto');
+      $('cajaBusca').classList.add('oculto');
       msgMat('');
-    });
+    }
     $('otroMat').addEventListener('click', () => {
-      matSel = null; $('matElegido').classList.add('oculto'); $('buscaMat').classList.remove('oculto'); $('buscaMat').focus();
+      matSel = null; $('matElegido').classList.add('oculto'); $('cajaBusca').classList.remove('oculto'); $('buscaMat').focus();
     });
+
+    // ---- Escanear QR: de una estantería (?u=A1) o de un material (?m=REF) ----
+    let flujo = null, buscando = false, detector = null;
+    function pararCamara() {
+      buscando = false;
+      if (flujo) flujo.getTracks().forEach(t => t.stop());
+      flujo = null;
+      $('escaner').classList.add('oculto');
+    }
+    function cargarJsQR() {
+      return new Promise((ok, ko) => {
+        if (window.jsQR) return ok();
+        const sc = document.createElement('script');
+        sc.src = 'jsqr.js'; sc.onload = ok; sc.onerror = () => ko(new Error('No se ha podido cargar el lector de QR'));
+        document.head.appendChild(sc);
+      });
+    }
+    function usarCodigo(texto) {
+      let u = '', ref = '';
+      try { const url = new URL(texto); u = url.searchParams.get('u') || ''; ref = url.searchParams.get('m') || ''; }
+      catch (e) { ref = String(texto).trim(); }
+      if (ref) {
+        const m = materiales.find(x => x.ref.toLowerCase() === ref.toLowerCase());
+        if (m) { elegirMat(m); return; }
+        msgMat('Ese código (' + ref + ') no es de ningún material del almacén.', 'error'); return;
+      }
+      if (u) {
+        $('matElegido').classList.add('oculto'); $('cajaBusca').classList.remove('oculto'); $('buscaMat').value = '';
+        const res = materiales.filter(m => m.ubicacion === u);
+        if (res.length === 1) { elegirMat(res[0]); return; }
+        pintarOpciones(res, 'Estantería ' + u + ': elige el material', 'No hay materiales apuntados en la ubicación ' + u + '.');
+        msgMat('');
+        return;
+      }
+      msgMat('Ese código QR no es del almacén.', 'error');
+    }
+    $('btnQR').addEventListener('click', async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msgMat('Este móvil no deja usar la cámara desde la página.', 'error'); return; }
+      $('escTxt').innerText = 'Apunta al código QR de la estantería o del material';
+      $('escaner').classList.remove('oculto');
+      try {
+        flujo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        const v = $('video'); v.srcObject = flujo; await v.play();
+        if ('BarcodeDetector' in window) {
+          try { if ((await BarcodeDetector.getSupportedFormats()).includes('qr_code')) detector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { detector = null; }
+        }
+        if (!detector) await cargarJsQR();
+        const lienzo = document.createElement('canvas'), ctx = lienzo.getContext('2d', { willReadFrequently: true });
+        buscando = true;
+        const mirar = async () => {
+          if (!buscando) return;
+          let texto = '';
+          try {
+            if (v.readyState >= 2) {
+              if (detector) { const r = await detector.detect(v); if (r.length) texto = r[0].rawValue; }
+              else {
+                const k = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+                lienzo.width = Math.round(v.videoWidth * k); lienzo.height = Math.round(v.videoHeight * k);
+                ctx.drawImage(v, 0, 0, lienzo.width, lienzo.height);
+                const img = ctx.getImageData(0, 0, lienzo.width, lienzo.height);
+                const r = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+                if (r) texto = r.data;
+              }
+            }
+          } catch (e) { /* sigue mirando */ }
+          if (texto) { if (navigator.vibrate) navigator.vibrate(80); pararCamara(); usarCodigo(texto); return; }
+          setTimeout(mirar, 180);
+        };
+        mirar();
+      } catch (e) {
+        pararCamara();
+        msgMat(/Permission|NotAllowed/i.test(e.name + e.message) ? 'Hay que dar permiso a la cámara para escanear.' : 'No se puede abrir la cámara (' + e.message + ').', 'error');
+      }
+    });
+    $('cerrarQR').addEventListener('click', pararCamara);
     document.querySelectorAll('.btn-cant').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('.btn-cant').forEach(x => x.classList.remove('on'));
       b.classList.add('on'); $('cantMat').value = b.dataset.q.replace('.', ',');
@@ -323,7 +423,7 @@
         if (r.ok) {
           matSel.stock = Math.round((matSel.stock - q) * 1000) / 1000;
           pintarUsados(r.usados);
-          matSel = null; $('matElegido').classList.add('oculto'); $('buscaMat').classList.remove('oculto');
+          matSel = null; $('matElegido').classList.add('oculto'); $('cajaBusca').classList.remove('oculto');
         }
       } catch (e) {
         msgMat('Error: ' + e.message + '. Vuelve a intentarlo.', 'error');

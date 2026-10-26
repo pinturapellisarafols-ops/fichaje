@@ -55,6 +55,7 @@
     .etq .qr { display: flex; justify-content: center; margin: 8px 0; }
     .etq .u { font-size: 30px; font-weight: 800; letter-spacing: .04em; }
     .etq .n { font-size: 12px; color: #5f6368; }
+    .etq .t2 { font-size: 15px; font-weight: 700; line-height: 1.25; }
     @media print {
       header, .no-print { display: none !important; }
       body { background: #fff; }
@@ -113,7 +114,7 @@
     let datos = null;
     let ubic = P.get('u') || '';       // ubicación elegida ('' = todas, '-' = sin ubicación)
     let modo = 'recuento';             // 'recuento' | 'entrada'
-    let filtro = '';
+    let filtro = P.get('m') || '';   // ?m=REF (QR de un material) abre ese material
 
     async function api(cuerpo) {
       const r = await fetch(API, { method: 'POST', body: JSON.stringify(cuerpo), credentials: 'omit' });
@@ -258,43 +259,60 @@
       document.getElementById('btnAlta').disabled = false;
     };
 
-    // ---- Etiquetas QR por ubicación (para imprimir) ----
+    // ---- Etiquetas QR para imprimir: por ubicación (?u=A1) o por material (?m=REF) ----
+    let tipoEtq = 'ubicacion', ubicEtq = '', extras = [];
     function pintarEtiquetas() {
-      const base = location.origin + location.pathname;
-      const lista = datos.ubicaciones.length ? datos.ubicaciones : [];
-      $app.innerHTML = '<header class="no-print"><h1>🏷️ Etiquetas QR de las ubicaciones</h1>' +
-        '<div class="sub">Imprime y pega cada etiqueta en su estantería. Al escanearla se abre el inventario de esa ubicación.</div>' +
-        '<div class="fila"><input class="campo" id="extra" placeholder="Añadir ubicaciones: A1, A2, B1…">' +
-        '<button class="btn" id="anadir">Añadir</button><button class="btn sec" onclick="window.print()">🖨️ Imprimir</button>' +
+      $app.innerHTML = '<header class="no-print"><h1>🏷️ Etiquetas QR</h1>' +
+        '<div class="sub">Imprime y pega cada etiqueta. Desde la página de fichaje, el botón 📷 QR las lee y elige el material.</div>' +
+        '<div class="fila"><div class="modo" style="flex:1"><button data-t="ubicacion" class="' + (tipoEtq === 'ubicacion' ? 'on' : '') + '">Por estantería</button>' +
+        '<button data-t="material" class="' + (tipoEtq === 'material' ? 'on' : '') + '">Por material</button></div></div>' +
+        (tipoEtq === 'ubicacion'
+          ? '<div class="fila"><input class="campo" id="extra" placeholder="Añadir ubicaciones: A1, A2, B1…"><button class="btn" id="anadir">Añadir</button></div>'
+          : '<div class="chips"><button class="chip' + (!ubicEtq ? ' on' : '') + '" data-ue="">Todas</button>' +
+            datos.ubicaciones.map(u => '<button class="chip' + (ubicEtq === u ? ' on' : '') + '" data-ue="' + esc(u) + '">' + esc(u) + '</button>').join('') + '</div>') +
+        '<div class="fila"><button class="btn sec" onclick="window.print()">🖨️ Imprimir</button>' +
         '<a class="btn sec" href="inventario.html" style="text-decoration:none">← Volver</a></div></header>' +
         '<main><div class="etiquetas" id="etqs"></div></main>';
-      let todas = lista.slice();
+      document.querySelectorAll('[data-t]').forEach(x => x.onclick = () => { tipoEtq = x.dataset.t; pintarEtiquetas(); });
+      document.querySelectorAll('[data-ue]').forEach(x => x.onclick = () => { ubicEtq = x.dataset.ue; pintarEtiquetas(); });
+      const an = document.getElementById('anadir');
+      if (an) an.onclick = () => {
+        document.getElementById('extra').value.split(/[,;\s]+/).map(x => x.trim()).filter(x => x && !extras.includes(x) && !datos.ubicaciones.includes(x)).forEach(x => extras.push(x));
+        pintarEtiquetas();
+      };
       const dibujar = () => {
+        const base = location.origin + location.pathname;
+        let items;
+        if (tipoEtq === 'ubicacion') {
+          items = datos.ubicaciones.concat(extras).map(u => {
+            const n = datos.materiales.filter(m => m.ubicacion === u).length;
+            return { url: base + '?u=' + encodeURIComponent(u), arriba: 'ALMACÉN', grande: u, abajo: n ? n + (n === 1 ? ' material' : ' materiales') : '' };
+          });
+        } else {
+          items = datos.materiales.filter(m => !ubicEtq || m.ubicacion === ubicEtq).map(m => ({
+            url: base + '?m=' + encodeURIComponent(m.ref), arriba: m.familia || 'MATERIAL', texto: m.descripcion,
+            abajo: [m.ref, m.largo && m.ancho ? m.largo + '×' + m.ancho : '', m.ubicacion ? 'Ubic. ' + m.ubicacion : ''].filter(Boolean).join(' · ')
+          }));
+        }
         const cont = document.getElementById('etqs');
-        cont.innerHTML = todas.map((u, i) => {
-          const n = datos.materiales.filter(m => m.ubicacion === u).length;
-          return '<div class="etq"><div class="n">ALMACÉN</div><div class="qr" id="qr' + i + '"></div><div class="u">' + esc(u) + '</div>' +
-            '<div class="n">' + (n ? n + (n === 1 ? ' material' : ' materiales') : '') + '</div></div>';
-        }).join('') || '<p class="vacio">Aún no hay ubicaciones. Escríbelas arriba (por ejemplo A1, A2, B1) o ponlas en la columna H de la hoja Almacén.</p>';
-        todas.forEach((u, i) => {
+        cont.innerHTML = items.map((it, i) => '<div class="etq"><div class="n">' + esc(it.arriba) + '</div><div class="qr" id="qr' + i + '"></div>' +
+          (it.grande ? '<div class="u">' + esc(it.grande) + '</div>' : '<div class="t2">' + esc(it.texto) + '</div>') +
+          '<div class="n">' + esc(it.abajo) + '</div></div>').join('') ||
+          '<p class="vacio">' + (tipoEtq === 'ubicacion' ? 'Aún no hay ubicaciones. Escríbelas arriba (A1, A2, B1…) o ponlas en la columna H de la hoja Almacén.' : 'No hay materiales.') + '</p>';
+        items.forEach((it, i) => {
           const qr = qrcode(0, 'M');
-          qr.addData(base + '?u=' + encodeURIComponent(u));
+          qr.addData(it.url);
           qr.make();
           document.getElementById('qr' + i).innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
         });
       };
-      document.getElementById('anadir').onclick = () => {
-        document.getElementById('extra').value.split(/[,;\s]+/).map(x => x.trim()).filter(x => x && !todas.includes(x)).forEach(x => todas.push(x));
-        document.getElementById('extra').value = '';
-        dibujar();
-      };
       if (window.qrcode) dibujar();
       else {
-        const s = document.createElement('script');
-        s.src = 'qrcode.js';   // generador de QR (MIT, Kazuhiko Arase), en el mismo sitio
-        s.onload = dibujar;
-        s.onerror = () => { document.getElementById('etqs').innerHTML = '<p class="vacio err">No se ha podido cargar el generador de QR.</p>'; };
-        document.head.appendChild(s);
+        const sc = document.createElement('script');
+        sc.src = 'qrcode.js';   // generador de QR (MIT, Kazuhiko Arase), en el mismo sitio
+        sc.onload = dibujar;
+        sc.onerror = () => { document.getElementById('etqs').innerHTML = '<p class="vacio err">No se ha podido cargar el generador de QR.</p>'; };
+        document.head.appendChild(sc);
       }
     }
 
