@@ -345,8 +345,9 @@
         tip = 'Planificación\n' + todas.filter(o => !o.acabada).length + ' faenas en curso\n' + fichadosAhora.size + ' operarios fichados ahora';
       } else if (s.id === 'comercial') {
         const ent = proximasEntregas(todas);
-        estado = ent.vencidas.length ? { t: ent.vencidas.length + ' vencidas', c: 'critical' } : { t: ent.proximas.length + ' próximas', c: 'neutral' };
-        tip = 'Comercial\nEntregas en 14 días: ' + ent.proximas.length + '\nVencidas sin terminar: ' + ent.vencidas.length;
+        estado = ent.vencidas.length ? { t: ent.vencidas.length + ' vencidas', c: 'critical' } :
+          ent.riesgo.length ? { t: ent.riesgo.length + ' no llegan', c: 'warning' } : { t: ent.proximas.length + ' próximas', c: 'neutral' };
+        tip = 'Comercial\nEntregas en 14 días: ' + ent.proximas.length + '\nVencidas sin terminar: ' + ent.vencidas.length + '\nNo llegan a su fecha: ' + ent.riesgo.length;
       } else if (s.id === 'entregas') {
         const listas = otsTerminadas(todas);
         estado = { t: listas.length + ' listas', c: listas.length ? 'good' : 'neutral' };
@@ -518,12 +519,21 @@
         if (!f) return;
         const hecha = lista.every(o => o.acabada);
         const item = { ot: ot, cliente: lista[0].cliente, descripcion: lista[0].descripcion, f: f, entrega: lista[0].entrega,
+          tarde: lista.some(o => o.tarde), finOT: lista[0].finOT || '',
           ruta: lista.map(o => o.dep + (o.acabada ? ' ✔' : '')).join(' → ') };
         if (!hecha && f < hoy) vencidas.push(item);
         else if (!hecha && f <= en14) proximas.push(item);
       });
       proximas.sort((a, b) => a.f - b.f); vencidas.sort((a, b) => a.f - b.f);
-      return { proximas: proximas, vencidas: vencidas };
+      // Aún no han vencido, pero el plan dice que no llegan a su fecha
+      const riesgo = proximas.filter(x => x.tarde);
+      Object.keys(porOT).forEach(ot => {
+        const lista = porOT[ot], f = parseFecha(lista[0].entrega);
+        if (f && f > en14 && lista.some(o => o.tarde) && !lista.every(o => o.acabada)) riesgo.push({ ot: ot, cliente: lista[0].cliente, descripcion: lista[0].descripcion, f: f,
+          entrega: lista[0].entrega, tarde: true, finOT: lista[0].finOT || '', ruta: lista.map(o => o.dep + (o.acabada ? ' ✔' : '')).join(' → ') });
+      });
+      riesgo.sort((a, b) => a.f - b.f);
+      return { proximas: proximas, vencidas: vencidas, riesgo: riesgo };
     }
 
     function otsTerminadas(todas) {
@@ -611,6 +621,7 @@
           (o.ahora.includes(p.nombre) ? '▶ ' : '') + esc(p.nombre) + ' ' + h(p.horas) + ' h</span>').join('') +
         o.ahora.filter(n => !o.operarios.some(p => p.nombre === n)).map(n => '<span class="chip on">▶ ' + esc(n) + '</span>').join('') + '</div>' +
         (o.situacion ? '<div class="sit">' + esc(o.situacion) + (o.entrega ? ' · Entrega ' + esc(o.entrega) : '') + '</div>' : '') +
+        (o.tarde && !o.acabada ? '<div class="sit" style="color:var(--critical-t);font-weight:700">⏰ No llega a la entrega' + (o.finOT ? ' · fin previsto ' + esc(o.finOT) : '') + '</div>' : '') +
         (datos.almacen && datos.almacen.costePorOT && datos.almacen.costePorOT[o.ot] ? '<div class="sit">📦 Material de la OT: ' + eur(datos.almacen.costePorOT[o.ot]) + '</div>' : '') + '</div>';
     }
 
@@ -626,7 +637,8 @@
 
     function filaEntrega(x) {
       return '<div class="ot"><div class="top"><span class="cod">' + esc(x.ot) + '</span><span class="sit" style="margin-left:auto">Entrega ' + esc(x.entrega) + '</span></div>' +
-        '<div class="cli">' + esc(x.cliente) + '</div><div class="desc">' + esc(x.descripcion) + '</div><div class="sit">' + esc(x.ruta) + '</div></div>';
+        '<div class="cli">' + esc(x.cliente) + '</div><div class="desc">' + esc(x.descripcion) + '</div><div class="sit">' + esc(x.ruta) + '</div>' +
+        (x.tarde ? '<div class="sit" style="color:var(--critical-t);font-weight:700">⏰ No llega' + (x.finOT ? ' · fin previsto ' + esc(x.finOT) : '') + '</div>' : '') + '</div>';
     }
 
     function abrirSala(id, depDe, todas, sinAnimar) {
@@ -682,7 +694,9 @@
       } else if (s.id === 'comercial') {
         const e = proximasEntregas(todas);
         sub = 'Fechas de entrega comprometidas';
-        cuerpo += '<div class="kpis">' + kpi('Entregas en 14 días', e.proximas.length) + kpi('Vencidas sin terminar', e.vencidas.length) + '</div>';
+        cuerpo += '<div class="kpis">' + kpi('Entregas en 14 días', e.proximas.length) + kpi('Vencidas sin terminar', e.vencidas.length) +
+          kpi('No llegan a su fecha', e.riesgo.length, 'según el plan actual') + '</div>';
+        cuerpo += '<h3>No llegan a su fecha (' + e.riesgo.length + ')</h3>' + (e.riesgo.map(filaEntrega).join('') || '<p class="vacio">Todas las que no han vencido llegan a tiempo.</p>');
         cuerpo += '<h3>Vencidas sin terminar</h3>' + (e.vencidas.map(filaEntrega).join('') || '<p class="vacio">Ninguna.</p>');
         cuerpo += '<h3>Próximas entregas</h3>' + (e.proximas.map(filaEntrega).join('') || '<p class="vacio">Ninguna en los próximos 14 días.</p>');
       } else if (s.tipo === 'almacen') {
@@ -756,7 +770,7 @@
             ot('P25-11178', 'Agència Catalana', 'Rètols senyalització', 5, 0, [], [], { horas: 0, situacion: '⚠ Faltan las horas' }) ] },
           { nombre: 'Montaje', operarios: ['Quim', 'Didac', 'Samu'], ots: [
             ot('P26-07078', 'Proyectos de imagen', 'Riu Palace Jamaica', 3, 1, [['Quim', 1]], [], {}),
-            ot('P26-06174', 'Domingo Roige', 'Restauració rètol', 8, 0, [], [], { situacion: '⏳ Tras Rotulación', entrega: '29/10/2026' }),
+            ot('P26-06174', 'Domingo Roige', 'Restauració rètol', 8, 0, [], [], { situacion: '⏳ Tras Rotulación', entrega: '29/11/2026', tarde: true, finOT: '02/12 10:00' }),
             ot('P26-05040', 'Ajuntament de Vilafranca', 'Cabina policarbonat', 6, 6, [['Didac', 3], ['Samu', 3]], [], { acabada: true, situacion: '✔ Acabada' }) ] }
         ]
       };

@@ -18,6 +18,8 @@
     .btn { display: block; width: 100%; border: none; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; text-align: center; }
     .btn-entrada { background: #34a853; color: white; }
     .btn-salida { background: #ea4335; color: white; }
+    .btn-acabada { background: #fff; color: #1e8e3e; border: 2px solid #1e8e3e; font-size: 16px; padding: 13px; }
+    .btn-acabada:disabled { border-color: #dadce0; background: #fff; }
     .btn-pin { background: #1a73e8; color: white; }
     .btn:disabled { background: #dadce0; color: #80868b; cursor: not-allowed; }
     .pin { width: 100%; padding: 14px; font-size: 26px; letter-spacing: 12px; text-align: center; border: 2px solid #dadce0; border-radius: 12px; margin-top: 8px; }
@@ -91,6 +93,7 @@
       <input id="pin" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off">
       <button id="btnEntrada" class="btn btn-entrada">▶ FICHAR ENTRADA</button>
       <button id="btnSalida" class="btn btn-salida">⏹ FICHAR SALIDA</button>
+      <button id="btnAcabada" class="btn btn-acabada">✔ FAENA ACABADA</button>
     </div>
 
     <div id="statusMsg">Cargando…</div>
@@ -224,6 +227,25 @@
     }
     $('btnEntrada').addEventListener('click', () => fichar('Entrada'));
     $('btnSalida').addEventListener('click', () => fichar('Salida'));
+
+    // Faena acabada: el operario da por terminada la OT en su departamento (ficha su salida si la tenía abierta).
+    $('btnAcabada').addEventListener('click', async () => {
+      const pin = $('pin').value;
+      if (!/^\d{4}$/.test(pin)) { estado('Escribe tu PIN de 4 cifras.', 'error'); $('pin').focus(); return; }
+      if (!confirm('¿Seguro que la OT ' + ot + ' está ACABADA en tu departamento?\n\nPasará al departamento siguiente.')) return;
+      $('btnEntrada').disabled = true; $('btnSalida').disabled = true; $('btnAcabada').disabled = true;
+      estado('Guardando...');
+      try {
+        const res = await api({ accion: 'terminar', operario: operario, ot: ot, pin: pin });
+        if (res.nuevoEstado !== undefined) fichado = !!res.nuevoEstado;
+        estado((res.ok ? '✅ ' : '') + res.mensaje, res.ok ? 'success' : 'error');
+        if (res.ok) $('pin').value = '';
+      } catch (e) {
+        estado('Error: ' + e.message + '. Vuelve a intentarlo.', 'error');
+      }
+      $('btnAcabada').disabled = false;
+      botones();
+    });
 
     // ---- Fotos: se reducen en el móvil (máx. 1600 px) y se suben de una en una ----
     let fotosSubidas = 0;

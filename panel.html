@@ -241,7 +241,7 @@
         '<div class="ops">' + (ops || '<span class="lado">Nadie ha fichado aún</span>') + '</div></div>' +
         '<div class="lado">' + (o.asignado ? 'Asignado: <b>' + esc(o.asignado) + '</b><br>' : '') +
         (o.fin ? 'Fin previsto: ' + esc(o.fin) + '<br>' : '') + (o.entrega ? 'Entrega: ' + esc(o.entrega) + '<br>' : '') +
-        esc(o.situacion || '') + '</div></div>';
+        esc(o.situacion || '') + (o.tarde && !o.acabada ? '<br><b style="color:#d03b3b">⏰ No llega a la entrega</b>' : '') + '</div></div>';
     }
 
     cargar();
