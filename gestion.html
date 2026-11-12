@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Gestión del taller</title>
+  <style>
+    /* Misma familia que el Panel de faenas: fondo cálido, tarjetas blancas, chips. Layout: barra superior + vista activa. */
+    :root {
+      --bg: #f4f3ef; --surface: #fcfcfb; --surface-2: #f0efea; --border: #e2e0d9;
+      --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7974;
+      --accent: #2a78d6; --accent-soft: #e3eefb;
+      --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --neutral: #a3a29c;
+      --good-text: #006300; --warning-text: #8a5a00; --critical-text: #b02525;
+      --good-soft: #e3f3e3; --warning-soft: #fbf0d6; --critical-soft: #f8e1e1;
+      --chip: #eceae4; --shadow: 0 10px 40px rgba(20, 20, 15, .18);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #33332f;
+        --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+        --accent: #5a9ff0; --accent-soft: #1d2b3d; --neutral: #6b6a64;
+        --good-text: #4cc94c; --warning-text: #fab219; --critical-text: #ff7a7a;
+        --good-soft: #1a2c1a; --warning-soft: #33290f; --critical-soft: #3a1d1d;
+        --chip: #2a2a27; --shadow: 0 10px 40px rgba(0, 0, 0, .5);
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --border: #33332f;
+      --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+      --accent: #5a9ff0; --accent-soft: #1d2b3d; --neutral: #6b6a64;
+      --good-text: #4cc94c; --warning-text: #fab219; --critical-text: #ff7a7a;
+      --good-soft: #1a2c1a; --warning-soft: #33290f; --critical-soft: #3a1d1d;
+      --chip: #2a2a27; --shadow: 0 10px 40px rgba(0, 0, 0, .5);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { background: var(--bg); color: var(--text-primary);
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+
+    /* Barra superior */
+    .top { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--border); }
+    .top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-top: 12px; padding-bottom: 12px; }
+    .top h1 { font-size: 20px; margin: 0; white-space: nowrap; }
+    nav { display: flex; flex-wrap: wrap; gap: 4px; }
+    nav a { text-decoration: none; color: var(--text-secondary); padding: 7px 13px; border-radius: 999px; font-weight: 500; }
+    nav a:hover { background: var(--surface-2); }
+    nav a[aria-current="page"] { background: var(--text-primary); color: var(--surface); }
+    .grow { flex: 1; }
+    .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text-primary);
+      border-radius: 8px; padding: 7px 13px; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; gap: 6px; align-items: center; }
+    .btn:hover { background: var(--surface-2); }
+    .btn.primary { background: var(--text-primary); color: var(--surface); border-color: var(--text-primary); }
+    .btn.primary:hover { opacity: .88; }
+    .btn.danger { color: var(--critical-text); }
+    .btn[disabled] { opacity: .5; cursor: default; }
+    .meta { color: var(--text-muted); font-size: 13px; }
+    .error { color: var(--critical-text); }
+
+    /* Login */
+    .login { max-width: 380px; margin: 12vh auto; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; display: grid; gap: 12px; }
+    .login h2 { margin: 0; font-size: 22px; }
+    .login input { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
+
+    /* Vista */
+    .vhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin: 8px 0 14px; }
+    .vhead h2 { margin: 0; font-size: 24px; }
+    .resumen { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; text-align: left; cursor: pointer; }
+    .tile .t { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .tile .n { font-size: 26px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .tile .s { color: var(--text-muted); font-size: 12px; }
+    .tile.late .n { color: var(--critical-text); } .tile.soon .n { color: var(--warning-text); }
+    .tile[aria-pressed="true"] { border-color: var(--text-primary); box-shadow: inset 0 0 0 1px var(--text-primary); }
+    .filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; position: sticky; top: 62px; z-index: 10; background: var(--bg); padding: 6px 0; }
+    .buscar { flex: 1 1 240px; min-width: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+    .chipbtn { border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+      border-radius: 999px; padding: 6px 13px; font-size: 13px; cursor: pointer; }
+    .chipbtn[aria-pressed="true"] { background: var(--text-primary); color: var(--surface); border-color: var(--text-primary); }
+    select.sel { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; }
+
+    /* Pedidos */
+    h3.grupo { font-size: 15px; margin: 22px 0 8px; display: flex; gap: 8px; align-items: baseline; }
+    h3.grupo small { color: var(--text-muted); font-weight: 400; }
+    .lista { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .ped { display: grid; grid-template-columns: 58px 1fr auto; gap: 14px; align-items: center; padding: 12px 16px;
+      border-bottom: 1px solid var(--border); border-left: 4px solid transparent; cursor: pointer; }
+    .ped:last-child { border-bottom: none; }
+    .ped:hover { background: var(--surface-2); }
+    .ped.late { border-left-color: var(--critical); } .ped.soon { border-left-color: var(--warning); } .ped.done { opacity: .65; }
+    .fecha { text-align: center; line-height: 1.05; }
+    .fecha b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+    .fecha span { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+    .fecha.none b { font-size: 18px; color: var(--text-muted); }
+    .cli { font-weight: 600; overflow-wrap: anywhere; }
+    .desc { color: var(--text-secondary); overflow-wrap: anywhere; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; align-items: center; font-size: 12px; }
+    .chip { background: var(--chip); border-radius: 999px; padding: 2px 8px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .chip.code { font-family: ui-monospace, Menlo, monospace; }
+    .chip.dep { background: var(--accent-soft); color: var(--accent); }
+    .chip.now { background: var(--accent); color: #fff; font-weight: 600; }
+    .chip.warn { background: var(--warning-soft); color: var(--warning-text); }
+    .cuando { font-weight: 600; font-size: 12px; }
+    .late .cuando { color: var(--critical-text); } .soon .cuando { color: var(--warning-text); }
+    .estado { border: 0; border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--chip); }
+    .estado.e-term { background: var(--good-soft); color: var(--good-text); }
+    .estado.e-si { background: var(--accent-soft); color: var(--accent); }
+    .estado.e-anul { background: var(--critical-soft); color: var(--critical-text); }
+    .vacio { color: var(--text-muted); padding: 30px 4px; }
+
+    /* Tabla genérica, sin cuadrícula */
+    .tabla { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600;
+      padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; max-width: 320px; overflow-wrap: anywhere; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr.clic { cursor: pointer; } tbody tr.clic:hover td { background: var(--surface-2); }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    /* Importar */
+    .tipos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .tipo { background: var(--surface); border: 2px solid var(--border); border-radius: 14px; padding: 14px 16px; cursor: pointer; text-align: left; }
+    .tipo b { display: block; font-size: 16px; } .tipo span { color: var(--text-muted); font-size: 13px; }
+    .tipo[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .drop { display: grid; place-items: center; text-align: center; gap: 6px; padding: 42px 16px; border: 2px dashed var(--border);
+      border-radius: 16px; background: var(--surface); cursor: pointer; }
+    .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+    .drop .big { font-size: 18px; font-weight: 600; }
+    .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .previa { margin-top: 14px; display: grid; gap: 12px; }
+    .bigbtn { font-size: 17px; font-weight: 600; padding: 15px 22px; border-radius: 12px; border: 0; background: var(--text-primary); color: var(--surface); cursor: pointer; justify-self: start; }
+    .bigbtn[disabled] { opacity: .5; cursor: default; }
+
+    /* Acciones */
+    .acciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .accion { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; text-align: left; cursor: pointer; display: grid; gap: 6px; }
+    .accion:hover { border-color: var(--text-secondary); }
+    .accion b { font-size: 16px; } .accion span { color: var(--text-secondary); font-size: 13px; }
+    .accion .ico { font-size: 26px; }
+
+    /* Panel lateral de edición */
+    .velo { position: fixed; inset: 0; background: rgba(10, 10, 8, .35); z-index: 40; }
+    .cajon { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--surface); z-index: 41;
+      box-shadow: var(--shadow); display: flex; flex-direction: column; }
+    .cajon header { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; }
+    .cajon header h3 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+    .cajon .cuerpo { padding: 16px 18px; overflow-y: auto; flex: 1; display: grid; gap: 12px; align-content: start; }
+    .cajon footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
+    .campo { display: grid; gap: 4px; }
+    .campo label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .campo input, .campo select, .campo textarea { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); width: 100%; }
+    .campo textarea { min-height: 70px; resize: vertical; }
+    .campo .ro { padding: 8px 10px; border-radius: 8px; background: var(--surface-2); color: var(--text-secondary); min-height: 36px; overflow-wrap: anywhere; }
+    .campo.check { grid-template-columns: auto 1fr; align-items: center; }
+    .horas { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .horas .campo label { font-weight: 500; }
+    .segs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .segs button { border: 1px solid var(--border); background: var(--bg); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+    .segs button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface); border-color: var(--text-primary); }
+    .sep { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-top: 6px; }
+
+    /* Mensajes */
+    .modal { position: fixed; inset: 0; display: grid; place-items: center; z-index: 50; background: rgba(10, 10, 8, .35); padding: 16px; }
+    .modal .caja { background: var(--surface); border-radius: 16px; padding: 20px; width: min(560px, 100%); max-height: 80vh; overflow: auto; box-shadow: var(--shadow); display: grid; gap: 12px; }
+    .modal h3 { margin: 0; }
+    .modal pre { white-space: pre-wrap; font: inherit; margin: 0; background: var(--surface-2); border-radius: 10px; padding: 12px; }
+    .modal .fila { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+    #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text-primary); color: var(--surface);
+      padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 60; max-width: calc(100% - 32px); }
+    #toast.on { opacity: 1; }
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: g .7s linear infinite; vertical-align: -2px; }
+    @keyframes g { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spin { animation: none; } #toast { transition: none; } }
+    @media (max-width: 640px) {
+      .ped { grid-template-columns: 48px 1fr; gap: 10px; }
+      .ped .estado { grid-column: 2; justify-self: start; }
+      .horas { grid-template-columns: repeat(3, 1fr); }
+      .filtros { top: 0; position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="capa"></div>
+  <div id="toast" role="status"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    const API = 'https://script.google.com/macros/s/AKfycbzq594Jk7VnAxM5gFUEt3E2Ui8dChSJ3tp2f7WwtbxPDMVWfArRtBLDFuhBlyOkbYWm/exec';
+    const H_PEDIDOS = 'Pedidos', H_ALMACEN = 'Almacén';
+    // Columnas de Pedidos (0 = A)
+    const P = { codigo: 0, fecha1: 1, fecha2: 2, tipo: 3, cliente: 4, desc: 5, estado: 6, horas: 7, obs: 12, operarios: 13,
+      dpto: 14, finPrev: 15, ruta: 16, trab: 18, resta: 19, enProd: 20 };
+    const DEPS = ['Fresadora', 'Taller', 'Pintura', 'Rotulación', 'Montaje'];
+    const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    // Vistas: hash → pestaña
+    const VISTAS = [
+      { id: 'pedidos', t: 'Pedidos' }, { id: 'importar', t: 'Importar' }, { id: 'almacen', t: 'Almacén', hoja: H_ALMACEN },
+      { id: 'movimientos', t: 'Movimientos', hoja: 'Movimientos almacén' }, { id: 'tareas-fijas', t: 'Tareas fijas', hoja: 'Tareas fijas' },
+      { id: 'ausencias', t: 'Ausencias', hoja: 'Ausencias y festivos' }, { id: 'fichajes', t: 'Fichajes', hoja: 'Fichajes' },
+      { id: 'departamentos', t: 'Departamentos', hoja: 'Departamentos' }, { id: 'registro', t: 'Registro', hoja: 'Registro' },
+      { id: 'archivo', t: 'Archivo', hoja: 'Archivo pedidos' }, { id: 'acciones', t: 'Acciones' }
+    ];
+
+    const $app = document.getElementById('app'), $capa = document.getElementById('capa');
+    const guardarLS = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+    const leerLS = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const num = v => typeof v === 'number' ? v : (parseFloat(String(v || '').replace(',', '.')) || 0);
+    const hfmt = n => (Math.round(n * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+
+    const cache = {};
+    let hojasDisponibles = null;
+    const est = { q: '', estado: 'activas', tipo: '', urg: '', dep: '' };
+
+    async function api(cuerpo) {
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify(Object.assign({ accion: 'gestion', clave: leerLS('gestion_clave') }, cuerpo)), credentials: 'omit' });
+      if (!r.ok) throw new Error('El servidor no responde (' + r.status + ')');
+      const res = await r.json();
+      if (!res.ok && res.clave) { guardarLS('gestion_clave', null); pantallaClave(res.mensaje); throw new Error(res.mensaje); }
+      return res;
+    }
+
+    let tt;
+    function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 3500); }
+
+    function mensaje(titulo, texto, botones) {
+      return new Promise(res => {
+        $capa.innerHTML = '<div class="modal" role="dialog" aria-modal="true"><div class="caja"><h3>' + esc(titulo) + '</h3>' +
+          (texto ? '<pre>' + esc(texto) + '</pre>' : '') + '<div class="fila">' +
+          (botones || [['Cerrar', true, 'primary']]).map((b, i) => '<button class="btn ' + (b[2] || '') + '" data-i="' + i + '">' + esc(b[0]) + '</button>').join('') +
+          '</div></div></div>';
+        const bs = botones || [['Cerrar', true]];
+        $capa.querySelectorAll('[data-i]').forEach(el => el.onclick = () => { $capa.innerHTML = ''; res(bs[+el.dataset.i][1]); });
+        $capa.querySelector('.fila .btn:last-child').focus();
+      });
+    }
+    const confirmar = (t, x, si) => mensaje(t, x, [['Cancelar', false], [si || 'Sí, seguir', true, 'primary']]);
+
+    // ---------- Entrada ----------
+    function pantallaClave(msg) {
+      $capa.innerHTML = '';
+      $app.innerHTML = '<div class="wrap"><form class="login" id="fl"><h2>Gestión del taller</h2>' +
+        '<p class="meta">Escribe la clave de gestión (la que pusiste en la hoja: Planificador → 🔐 Clave de la página de gestión).</p>' +
+        '<input id="clave" type="password" autocomplete="current-password" aria-label="Clave de gestión">' +
+        '<button class="btn primary" type="submit">Entrar</button><div class="error">' + esc(msg || '') + '</div></form></div>';
+      document.getElementById('fl').onsubmit = e => { e.preventDefault(); guardarLS('gestion_clave', document.getElementById('clave').value); arrancar(); };
+      document.getElementById('clave').focus();
+    }
+
+    async function arrancar() {
+      if (!leerLS('gestion_clave')) { pantallaClave(); return; }
+      $app.innerHTML = '<div class="wrap"><p class="meta"><span class="spin"></span> Entrando…</p></div>';
+      try {
+        const r = await api({ op: 'entrar' });
+        if (!r.ok) { $app.innerHTML = '<div class="wrap"><p class="error">' + esc(r.mensaje) + '</p></div>'; return; }
+        hojasDisponibles = r.hojas;
+        pintarMarco();
+        irA();
+      } catch (e) { if (leerLS('gestion_clave')) $app.innerHTML = '<div class="wrap"><p class="error">No se puede conectar: ' + esc(e.message) + '</p></div>'; }
+    }
+
+    function vistasVisibles() { return VISTAS.filter(v => !v.hoja || hojasDisponibles.includes(v.hoja)); }
+
+    function pintarMarco() {
+      $app.innerHTML = '<div class="top"><div class="wrap"><h1>Gestión del taller</h1><nav id="nav">' +
+        vistasVisibles().map(v => '<a href="#' + v.id + '" data-v="' + v.id + '">' + esc(v.t) + '</a>').join('') +
+        '</nav><span class="grow"></span><a class="btn" href="panel.html">Panel</a><a class="btn" href="taller.html">Mapa</a>' +
+        '<button class="btn" id="salir">Salir</button></div></div><main class="wrap" id="vista"></main>';
+      document.getElementById('salir').onclick = () => { guardarLS('gestion_clave', null); pantallaClave(); };
+    }
+
+    function irA() {
+      const id = (location.hash || '#pedidos').slice(1);
+      const v = vistasVisibles().find(x => x.id === id) || VISTAS[0];
+      document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === v.id ? 'page' : 'false'));
+      cerrarCajon();
+      if (v.id === 'pedidos') vistaPedidos();
+      else if (v.id === 'importar') vistaImportar();
+      else if (v.id === 'acciones') vistaAcciones();
+      else vistaHoja(v);
+    }
+    window.addEventListener('hashchange', () => { if (hojasDisponibles) irA(); });
+
+    async function cargarHoja(nombre, forzar) {
+      if (cache[nombre] && !forzar) return cache[nombre];
+      const r = await api({ op: 'hoja', hoja: nombre });
+      if (!r.ok) throw new Error(r.mensaje);
+      cache[nombre] = r;
+      return r;
+    }
+
+    function cargando(txt) { document.getElementById('vista').innerHTML = '<p class="meta"><span class="spin"></span> ' + esc(txt || 'Cargando…') + '</p>'; }
+    function fallo(e) { document.getElementById('vista').innerHTML = '<p class="error">' + esc(e.message) + '</p><button class="btn" onclick="irA()">Reintentar</button>'; }
+
+    // ---------- Pedidos ----------
+    const hoy = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+    function fechaDe(v) {
+      if (!v) return null;
+      const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+    }
+    const cerrada = e => /^(TERMINADA|ANULADA)$/i.test(String(e || '').trim());
+    function urg(f) {
+      if (cerrada(f.v[P.estado])) return 'done';
+      const d = fechaDe(f.v[P.fecha2]);
+      if (!d) return 'none';
+      const x = Math.round((d - hoy()) / 864e5);
+      return x < 0 ? 'late' : x <= 7 ? 'soon' : 'later';
+    }
+    function cuando(f) {
+      const d = fechaDe(f.v[P.fecha2]);
+      if (!d) return 'Sin fecha de entrega';
+      if (cerrada(f.v[P.estado])) return 'Entrega ' + d.getDate() + ' ' + MESES[d.getMonth()];
+      const x = Math.round((d - hoy()) / 864e5);
+      if (x === 0) return 'Se entrega hoy';
+      if (x === 1) return 'Se entrega mañana';
+      if (x > 1) return 'Faltan ' + x + ' días';
+      return x === -1 ? 'Venció ayer' : 'Vencida hace ' + (-x) + ' días';
+    }
+    function claseEstado(e) {
+      e = String(e || '').toUpperCase();
+      return e === 'TERMINADA' ? 'e-term' : e === 'ANULADA' ? 'e-anul' : e === 'SI' ? 'e-si' : '';
+    }
+
+    async function vistaPedidos(forzar) {
+      cargando('Cargando pedidos…');
+      let d;
+      try { d = await cargarHoja(H_PEDIDOS, forzar); } catch (e) { fallo(e); return; }
+      const opEstado = (d.columnas[P.estado] && d.columnas[P.estado].opciones) || ['Abierto', 'SI', 'TERMINADA', 'ANULADA'];
+      const tipos = [...new Set(d.filas.map(f => String(f.v[P.tipo] || '').trim()).filter(Boolean))].sort();
+      const activas = d.filas.filter(f => !cerrada(f.v[P.estado]));
+      const c = k => activas.filter(f => urg(f) === k).length;
+      const sinHoras = activas.filter(f => !DEPS.some((x, i) => num(f.v[P.horas + i]) > 0)).length;
+
+      const $v = document.getElementById('vista');
+      $v.innerHTML = '<div class="vhead"><h2>Pedidos</h2><span class="meta">Leído ' + esc(d.generado) + '</span><span class="grow"></span>' +
+        '<button class="btn" id="recargar">↻ Actualizar</button><button class="btn primary" id="nuevo">＋ Nuevo pedido</button></div>' +
+        '<div class="resumen">' +
+        tile('', activas.length, 'Activos', 'sin terminar ni anular') +
+        tile('late', c('late'), 'Fuera de plazo', 'fecha de entrega pasada') +
+        tile('soon', c('soon'), 'Esta semana', 'se entregan en 7 días') +
+        tile('nohoras', sinHoras, 'Sin horas', 'no pasan por ningún dpto.') +
+        tile('none', c('none'), 'Sin fecha', 'sin fecha de entrega') + '</div>' +
+        '<div class="filtros"><input class="buscar" id="q" type="search" placeholder="Buscar cliente, faena u OT" aria-label="Buscar" value="' + esc(est.q) + '">' +
+        [['activas', 'Activos']].concat(opEstado.map(o => [o, o])).concat([['todas', 'Todos']]).map(o =>
+          '<button class="chipbtn" data-e="' + esc(o[0]) + '" aria-pressed="' + (est.estado === o[0]) + '">' + esc(o[1]) + '</button>').join('') +
+        '<select class="sel" id="tipo" aria-label="Tipo"><option value="">Todos los tipos</option>' + tipos.map(t => '<option' + (est.tipo === t ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select>' +
+        '<select class="sel" id="dep" aria-label="Departamento"><option value="">Todos los dptos.</option>' + DEPS.map(t => '<option' + (est.dep === t ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select>' +
+        '</div><div id="lista"></div>';
+
+      function tile(k, n, t, s) { return '<button class="tile ' + k + '" data-u="' + k + '" aria-pressed="' + (est.urg === k && k !== '') + '"><div class="t">' + t + '</div><div class="n">' + n + '</div><div class="s">' + s + '</div></button>'; }
+
+      const pintarLista = () => {
+        const q = est.q.toLowerCase();
+        const vis = d.filas.filter(f => {
+          const e = String(f.v[P.estado] || '');
+          if (est.estado === 'activas' && cerrada(e)) return false;
+          if (est.estado !== 'activas' && est.estado !== 'todas' && e !== est.estado) return false;
+          if (est.tipo && String(f.v[P.tipo]).trim() !== est.tipo) return false;
+          if (est.dep && !(num(f.v[P.horas + DEPS.indexOf(est.dep)]) > 0)) return false;
+          if (est.urg === 'nohoras') { if (DEPS.some((x, i) => num(f.v[P.horas + i]) > 0)) return false; }
+          else if (est.urg && urg(f) !== est.urg) return false;
+          if (q && !(f.t[P.codigo] + ' ' + f.t[P.cliente] + ' ' + f.t[P.desc] + ' ' + f.t[P.obs]).toLowerCase().includes(q)) return false;
+          return true;
+        });
+        const grupos = [['late', 'Fuera de plazo'], ['soon', 'Esta semana'], ['later', 'Más adelante'], ['none', 'Sin fecha de entrega'], ['done', 'Terminados y anulados']];
+        let html = '';
+        grupos.forEach(([k, t]) => {
+          const g = vis.filter(f => urg(f) === k).sort((a, b) => {
+            const da = fechaDe(a.v[P.fecha2]) || 0, db = fechaDe(b.v[P.fecha2]) || 0;
+            return k === 'done' || k === 'late' ? db - da : da - db;
+          });
+          if (g.length) html += '<h3 class="grupo">' + t + ' <small>' + g.length + '</small></h3><div class="lista">' + g.map(f => tarjeta(f, opEstado)).join('') + '</div>';
+        });
+        document.getElementById('lista').innerHTML = html || '<p class="vacio">Ningún pedido coincide con el filtro.</p>';
+      };
+      pintarLista();
+
+      $v.querySelector('#recargar').onclick = () => vistaPedidos(true);
+      $v.querySelector('#nuevo').onclick = () => abrirCajon(d, null);
+      $v.querySelector('#q').oninput = e => { est.q = e.target.value; pintarLista(); };
+      $v.querySelector('#tipo').onchange = e => { est.tipo = e.target.value; pintarLista(); };
+      $v.querySelector('#dep').onchange = e => { est.dep = e.target.value; pintarLista(); };
+      $v.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { est.estado = b.dataset.e; vistaPedidos(); });
+      $v.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { est.urg = est.urg === b.dataset.u ? '' : b.dataset.u; vistaPedidos(); });
+      $v.querySelector('#lista').addEventListener('click', e => {
+        if (e.target.closest('select')) return;
+        const el = e.target.closest('.ped'); if (!el) return;
+        abrirCajon(d, d.filas.find(f => f.fila === +el.dataset.fila));
+      });
+      $v.querySelector('#lista').addEventListener('keydown', e => {
+        const el = e.target.closest('.ped'); if (!el || e.target.closest('select') || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault(); abrirCajon(d, d.filas.find(f => f.fila === +el.dataset.fila));
+      });
+      $v.querySelector('#lista').addEventListener('change', async e => {
+        const s = e.target.closest('select.estado'); if (!s) return;
+        const f = d.filas.find(x => x.fila === +s.dataset.fila);
+        const antes = f.v[P.estado];
+        s.disabled = true;
+        try {
+          const r = await api({ op: 'guardar', hoja: H_PEDIDOS, fila: f.fila, guarda: f.t[P.codigo], valores: { [P.estado]: { v: s.value, tipo: 'texto' } } });
+          if (!r.ok) throw new Error(r.mensaje);
+          f.v[P.estado] = f.t[P.estado] = s.value;
+          toast(f.t[P.codigo] + ' → ' + s.value + '. El calendario se replanifica solo en un momento.');
+          vistaPedidos();
+        } catch (err) { s.value = antes; s.disabled = false; mensaje('No se ha guardado', err.message); }
+      });
+    }
+
+    function tarjeta(f, opEstado) {
+      const u = urg(f), d = fechaDe(f.v[P.fecha2]);
+      const fecha = d ? '<div class="fecha"><b>' + d.getDate() + '</b><span>' + MESES[d.getMonth()] + (d.getFullYear() !== new Date().getFullYear() ? ' ' + String(d.getFullYear()).slice(2) : '') + '</span></div>'
+        : '<div class="fecha none"><b>—</b><span>sin fecha</span></div>';
+      const dpto = String(f.v[P.dpto] || '');
+      const deps = DEPS.map((x, i) => num(f.v[P.horas + i]) > 0 ? '<span class="chip ' + (dpto === x ? 'now' : 'dep') + '">' + x + ' ' + hfmt(num(f.v[P.horas + i])) + ' h</span>' : '').join('');
+      const aviso = dpto.indexOf('⚠') === 0 ? '<span class="chip warn">' + esc(dpto.replace('⚠', '').trim()) + '</span>' : '';
+      const trab = num(f.v[P.trab]) > 0 ? '<span class="chip">' + hfmt(num(f.v[P.trab])) + ' h fichadas</span>' : '';
+      const prev = f.t[P.finPrev] ? '<span class="chip">Fin previsto ' + esc(f.t[P.finPrev]) + '</span>' : '';
+      const obs = f.t[P.obs] ? '<span class="chip" title="' + esc(f.t[P.obs]) + '">📝 ' + esc(String(f.t[P.obs]).slice(0, 40)) + (String(f.t[P.obs]).length > 40 ? '…' : '') + '</span>' : '';
+      const e = String(f.v[P.estado] || '');
+      const ops = (opEstado.includes(e) || !e ? opEstado : [e].concat(opEstado));
+      return '<div class="ped ' + u + '" data-fila="' + f.fila + '" tabindex="0" role="button" aria-label="Editar ' + esc(f.t[P.codigo]) + '">' + fecha +
+        '<div><div class="cli">' + esc(f.t[P.cliente] || '(sin cliente)') + '</div><div class="desc">' + esc(f.t[P.desc]) + '</div>' +
+        '<div class="chips"><span class="cuando">' + cuando(f) + '</span><span class="chip code">' + esc(f.t[P.codigo]) + '</span>' +
+        (f.t[P.tipo] ? '<span class="chip">' + esc(f.t[P.tipo]) + '</span>' : '') + deps + aviso + prev + trab + obs + '</div></div>' +
+        '<select class="estado ' + claseEstado(e) + '" data-fila="' + f.fila + '" aria-label="Estado de ' + esc(f.t[P.codigo]) + '">' +
+        (e ? '' : '<option value="" selected>Sin estado</option>') +
+        ops.map(o => '<option' + (o === e ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select></div>';
+    }
+
+    // ---------- Panel lateral: editar o añadir una fila ----------
+    function cerrarCajon() { const c = document.getElementById('cajon'); if (c) c.remove(); }
+
+    function campoHTML(col, j, valor, texto, idp) {
+      const id = idp + j, nombre = esc(col.nombre);
+      if (!col.editable) return '<div class="campo"><label>' + nombre + '</label><div class="ro">' + (esc(texto) || '—') + '</div></div>';
+      const v = valor == null ? '' : valor;
+      if (col.tipo === 'casilla') return '<div class="campo check"><input type="checkbox" id="' + id + '" data-j="' + j + '"' + (v === true ? ' checked' : '') + '><label for="' + id + '">' + nombre + '</label></div>';
+      let input;
+      if (col.opciones && col.opciones.length) {
+        const ops = col.opciones.includes(String(v)) || v === '' ? col.opciones : [String(v)].concat(col.opciones);
+        input = '<select id="' + id + '" data-j="' + j + '"><option value=""></option>' + ops.map(o => '<option' + (o === String(v) ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
+      } else if (col.tipo === 'fecha') {
+        const s = String(v); const tiempo = s.includes('T');
+        input = '<input id="' + id + '" data-j="' + j + '" type="' + (tiempo ? 'datetime-local' : 'date') + '" value="' + esc(s) + '">';
+      } else if (col.tipo === 'hora') {
+        input = '<input id="' + id + '" data-j="' + j + '" type="time" value="' + esc(v) + '">';
+      } else if (col.tipo === 'numero') {
+        input = '<input id="' + id + '" data-j="' + j + '" inputmode="decimal" value="' + esc(typeof v === 'number' ? String(v).replace('.', ',') : v) + '">';
+      } else if (/descrip|observ|nota|coment/i.test(col.nombre) || String(v).length > 50) {
+        input = '<textarea id="' + id + '" data-j="' + j + '">' + esc(v) + '</textarea>';
+      } else {
+        input = '<input id="' + id + '" data-j="' + j + '" value="' + esc(v) + '">';
+      }
+      return '<div class="campo"><label for="' + id + '">' + nombre + '</label>' + input + '</div>';
+    }
+
+    function abrirCajon(d, fila) {
+      cerrarCajon();
+      const esPedidos = d.hoja === H_PEDIDOS;
+      const nueva = !fila;
+      const cols = d.columnas;
+      // Valores por defecto en una fila nueva de Pedidos
+      const val = j => {
+        if (!nueva) return fila.v[j];
+        if (esPedidos && j === P.estado) return (cols[j].opciones || []).includes('SI') ? 'SI' : '';
+        if (esPedidos && j === P.operarios) return 1;
+        if (esPedidos && j === P.fecha1) { const h = hoy(); return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + String(h.getDate()).padStart(2, '0'); }
+        return cols[j].tipo === 'casilla' ? false : '';
+      };
+      const txt = j => nueva ? '' : fila.t[j];
+      // En una fila nueva, la primera columna siempre se puede escribir
+      const colsEd = cols.map((c, j) => nueva && j === 0 ? Object.assign({}, c, { editable: true }) : c);
+      if (nueva && !d.conf.alta) return;
+
+      let cuerpo = '';
+      if (esPedidos) {
+        const bloque = js => js.map(j => campoHTML(colsEd[j], j, val(j), txt(j), 'c')).join('');
+        const e = String(val(P.estado) || '');
+        const ops = cols[P.estado].opciones || [];
+        cuerpo += bloque([P.codigo, P.cliente, P.desc]);
+        if (cols[P.estado].editable) {
+          cuerpo += '<div class="campo"><label>Estado</label><div class="segs" id="segEstado">' + (ops.includes(e) || !e ? ops : [e].concat(ops)).map(o =>
+            '<button type="button" data-o="' + esc(o) + '" aria-pressed="' + (o === e) + '">' + esc(o) + '</button>').join('') + '</div></div>';
+        }
+        cuerpo += '<div class="sep">Horas por departamento</div><div class="horas">' +
+          DEPS.map((x, i) => campoHTML(Object.assign({}, colsEd[P.horas + i], { nombre: x }), P.horas + i, val(P.horas + i), txt(P.horas + i), 'c')).join('') + '</div>';
+        cuerpo += '<div class="sep">Fechas y más</div>' + bloque([P.fecha1, P.fecha2, P.tipo, P.operarios, P.obs]);
+        if (!nueva) {
+          cuerpo += '<div class="sep">Lo calcula el planificador</div>' +
+            [P.dpto, P.finPrev, P.ruta, P.trab, P.resta].filter(j => cols[j]).map(j => campoHTML(Object.assign({}, cols[j], { editable: false }), j, '', txt(j), 'c')).join('');
+        }
+      } else {
+        cuerpo = colsEd.map((c, j) => campoHTML(c, j, val(j), txt(j), 'c')).join('');
+      }
+
+      const editable = d.conf.editable;
+      const titulo = nueva ? (esPedidos ? 'Nuevo pedido' : 'Añadir a ' + d.hoja) : (esc(fila.t[0]) + (esPedidos ? ' · ' + esc(fila.t[P.cliente]) : ''));
+      const el = document.createElement('div');
+      el.id = 'cajon';
+      el.innerHTML = '<div class="velo"></div><aside class="cajon" role="dialog" aria-modal="true" aria-label="' + titulo + '"><header><h3>' + titulo + '</h3><span class="grow"></span>' +
+        '<button class="btn" id="cx" aria-label="Cerrar">✕</button></header><form class="cuerpo" id="fc">' + cuerpo + '</form>' +
+        '<footer>' + (editable ? '<button class="btn primary" id="gd">' + (nueva ? 'Añadir' : 'Guardar cambios') + '</button>' : '<span class="meta">Pestaña de consulta: no se edita desde aquí.</span>') +
+        '<button class="btn" id="cc">Cancelar</button><span class="grow"></span>' +
+        (!nueva && d.conf.borrar ? '<button class="btn danger" id="br">Borrar fila</button>' : '') + '</footer></aside>';
+      document.body.appendChild(el);
+      const $f = el.querySelector('#fc');
+      el.querySelector('.velo').onclick = cerrarCajon;
+      el.querySelector('#cx').onclick = cerrarCajon;
+      el.querySelector('#cc').onclick = cerrarCajon;
+      el.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarCajon(); });
+      $f.onsubmit = e => e.preventDefault();
+      let estadoSel = String(val(P.estado) || '');
+      const seg = el.querySelector('#segEstado');
+      if (seg) seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; estadoSel = b.dataset.o; seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); };
+      const primero = $f.querySelector('input, select, textarea'); if (primero) primero.focus();
+
+      const leerForm = () => {
+        const valores = {};
+        $f.querySelectorAll('[data-j]').forEach(inp => {
+          const j = +inp.dataset.j, c = colsEd[j];
+          const v = inp.type === 'checkbox' ? inp.checked : inp.value;
+          const antes = nueva ? (c.tipo === 'casilla' ? false : '') : (c.tipo === 'numero' && typeof fila.v[j] === 'number' ? String(fila.v[j]).replace('.', ',') : fila.v[j]);
+          if (nueva ? (v !== '' && v !== false) : String(v) !== String(antes == null ? '' : antes)) valores[j] = { v: v, tipo: c.tipo };
+        });
+        if (seg && (nueva ? estadoSel : estadoSel !== String(fila.v[P.estado] || ''))) valores[P.estado] = { v: estadoSel, tipo: 'texto' };
+        return valores;
+      };
+
+      const gd = el.querySelector('#gd');
+      if (gd) gd.onclick = async () => {
+        const valores = leerForm();
+        if (!Object.keys(valores).length) { cerrarCajon(); return; }
+        gd.disabled = true; gd.innerHTML = '<span class="spin"></span> Guardando…';
+        try {
+          const r = nueva ? await api({ op: 'nueva', hoja: d.hoja, valores: valores })
+            : await api({ op: 'guardar', hoja: d.hoja, fila: fila.fila, guarda: fila.t[0], valores: valores });
+          if (!r.ok) throw new Error(r.mensaje);
+          cerrarCajon();
+          toast(nueva ? 'Añadido.' : 'Guardado.' + (esPedidos ? ' El calendario se replanifica solo en un momento.' : ''));
+          delete cache[d.hoja];
+          irA();
+        } catch (err) { gd.disabled = false; gd.textContent = nueva ? 'Añadir' : 'Guardar cambios'; mensaje('No se ha guardado', err.message); }
+      };
+      const br = el.querySelector('#br');
+      if (br) br.onclick = async () => {
+        if (!await confirmar('¿Borrar esta fila?', fila.t.filter(Boolean).join(' · '), 'Borrar')) return;
+        try {
+          const r = await api({ op: 'borrar', hoja: d.hoja, fila: fila.fila, guarda: fila.t[0] });
+          if (!r.ok) throw new Error(r.mensaje);
+          cerrarCajon(); toast('Fila borrada.'); delete cache[d.hoja]; irA();
+        } catch (err) { mensaje('No se ha borrado', err.message); }
+      };
+    }
+
+    // ---------- Pestañas genéricas (almacén, tareas fijas, ausencias…) ----------
+    const filtroHoja = {};
+    async function vistaHoja(v, forzar) {
+      cargando('Cargando ' + v.t.toLowerCase() + '…');
+      let d;
+      try { d = await cargarHoja(v.hoja, forzar); } catch (e) { fallo(e); return; }
+      const $v = document.getElementById('vista');
+      const extra = v.hoja === H_ALMACEN ? '<a class="btn" href="inventario.html">📦 Inventario y recuento</a>' : '';
+      $v.innerHTML = '<div class="vhead"><h2>' + esc(v.hoja) + '</h2><span class="meta">' + d.filas.length + ' filas · leído ' + esc(d.generado) +
+        (d.recortado ? ' · se muestran las últimas ' + d.filas.length : '') + '</span><span class="grow"></span>' + extra +
+        '<button class="btn" id="recargar">↻ Actualizar</button>' + (d.conf.alta ? '<button class="btn primary" id="nuevo">＋ Añadir</button>' : '') + '</div>' +
+        '<div class="filtros"><input class="buscar" id="q" type="search" placeholder="Buscar en ' + esc(v.hoja) + '" aria-label="Buscar" value="' + esc(filtroHoja[v.hoja] || '') + '"></div>' +
+        '<div class="tabla" id="tabla"></div>';
+      const ordenadas = d.conf.editable ? d.filas : d.filas.slice().reverse(); // consultas: lo último arriba
+      const pintar = () => {
+        const q = (filtroHoja[v.hoja] || '').toLowerCase();
+        const vis = ordenadas.filter(f => !q || f.t.join(' ').toLowerCase().includes(q));
+        if (!d.columnas.length || !vis.length) { document.getElementById('tabla').innerHTML = '<p class="vacio" style="padding:20px">' + (q ? 'Nada coincide con la búsqueda.' : 'Esta pestaña está vacía.') + '</p>'; return; }
+        document.getElementById('tabla').innerHTML = '<table><thead><tr>' + d.columnas.map(c => '<th scope="col">' + esc(c.nombre) + '</th>').join('') + '</tr></thead><tbody>' +
+          vis.slice(0, 800).map(f => '<tr class="clic" data-fila="' + f.fila + '" tabindex="0">' + d.columnas.map((c, j) =>
+            '<td class="' + (c.tipo === 'numero' ? 'num' : '') + '">' + (c.tipo === 'casilla' ? (f.v[j] === true ? '✔' : '') : esc(f.t[j])) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+      };
+      pintar();
+      $v.querySelector('#q').oninput = e => { filtroHoja[v.hoja] = e.target.value; pintar(); };
+      $v.querySelector('#recargar').onclick = () => vistaHoja(v, true);
+      const nb = $v.querySelector('#nuevo'); if (nb) nb.onclick = () => abrirCajon(d, null);
+      const abrir = e => { const tr = e.target.closest('tr[data-fila]'); if (tr) abrirCajon(d, d.filas.find(f => f.fila === +tr.dataset.fila)); };
+      $v.querySelector('#tabla').addEventListener('click', abrir);
+      $v.querySelector('#tabla').addEventListener('keydown', e => { if (e.key === 'Enter') abrir(e); });
+    }
+
+    // ---------- Importar ----------
+    const imp = { tipo: 'pedidos', filas: null, nombre: '' };
+    function vistaImportar() {
+      const $v = document.getElementById('vista');
+      $v.innerHTML = '<div class="vhead"><h2>Importar del Business Central</h2></div>' +
+        '<div class="tipos">' +
+        '<button class="tipo" data-t="pedidos" aria-pressed="' + (imp.tipo === 'pedidos') + '"><b>📥 Pedidos (OT)</b><span>Las OT nuevas entran en Pedidos y las que ya estaban se actualizan. El estado no se toca.</span></button>' +
+        '<button class="tipo" data-t="materiales" aria-pressed="' + (imp.tipo === 'materiales') + '"><b>📦 Materiales</b><span>Productos y stock del BC al Almacén. No toca lo que habéis contado vosotros.</span></button></div>' +
+        '<label class="drop" id="drop"><input type="file" id="fi" accept=".xlsx,.xls,.csv"><span class="big">Arrastra aquí el Excel</span>' +
+        '<span class="meta">o pulsa para elegirlo · .xlsx, .xls o .csv</span></label><div id="previa" class="previa"></div>';
+      $v.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { imp.tipo = b.dataset.t; vistaImportar(); });
+      const drop = $v.querySelector('#drop'), fi = $v.querySelector('#fi');
+      fi.onchange = () => fi.files[0] && leerExcel(fi.files[0]);
+      drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+      drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+      drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) leerExcel(e.dataTransfer.files[0]); });
+      if (imp.filas) pintarPrevia();
+    }
+
+    async function leerExcel(file) {
+      const $p = document.getElementById('previa');
+      if (typeof XLSX === 'undefined') { $p.innerHTML = '<p class="error">No se ha cargado el lector de Excel. Comprueba la conexión y recarga.</p>'; return; }
+      $p.innerHTML = '<p class="meta"><span class="spin"></span> Leyendo ' + esc(file.name) + '…</p>';
+      try {
+        const buf = await file.arrayBuffer();
+        const csv = /\.csv$/i.test(file.name);
+        const wb = csv ? XLSX.read(new TextDecoder('utf-8').decode(buf), { type: 'string', raw: true }) : XLSX.read(buf, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        if (!ws || !ws['!ref']) throw new Error('El archivo está vacío.');
+        const rg = XLSX.utils.decode_range(ws['!ref']);
+        const filas = [];
+        for (let r = rg.s.r; r <= rg.e.r; r++) {
+          const fila = [];
+          for (let c = rg.s.c; c <= rg.e.c; c++) {
+            const cel = ws[XLSX.utils.encode_cell({ r: r, c: c })];
+            let v = '';
+            if (cel) {
+              if (cel.t === 'n' && cel.z && XLSX.SSF.is_date(cel.z)) {
+                const p = XLSX.SSF.parse_date_code(cel.v);
+                v = { d: p.y + '-' + String(p.m).padStart(2, '0') + '-' + String(p.d).padStart(2, '0') };
+              } else if (cel.t === 'd' && cel.v instanceof Date) {
+                v = { d: cel.v.getFullYear() + '-' + String(cel.v.getMonth() + 1).padStart(2, '0') + '-' + String(cel.v.getDate()).padStart(2, '0') };
+              } else v = cel.v == null ? '' : cel.v;
+            }
+            fila.push(v);
+          }
+          if (fila.some(x => x !== '' && x != null)) filas.push(fila);
+        }
+        if (filas.length < 2) throw new Error('El archivo no tiene filas debajo de las cabeceras.');
+        imp.filas = filas; imp.nombre = file.name;
+        pintarPrevia();
+      } catch (e) { imp.filas = null; $p.innerHTML = '<p class="error">No he podido leer el archivo: ' + esc(e.message) + '</p>'; }
+    }
+
+    const verCelda = v => v && typeof v === 'object' && v.d ? v.d.split('-').reverse().join('/') : v;
+    function pintarPrevia() {
+      const $p = document.getElementById('previa');
+      const f = imp.filas, n = f.length - 1, ancho = Math.min(10, Math.max(...f.map(x => x.length)));
+      $p.innerHTML = '<div class="meta">' + esc(imp.nombre) + ' · ' + n + ' filas de datos (primeras 6 abajo)</div>' +
+        '<div class="tabla"><table><thead><tr>' + f[0].slice(0, ancho).map(c => '<th>' + esc(verCelda(c)) + '</th>').join('') + '</tr></thead><tbody>' +
+        f.slice(1, 7).map(r => '<tr>' + r.slice(0, ancho).map(c => '<td>' + esc(verCelda(c)) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>' +
+        '<button class="bigbtn" id="go">Importar ' + n + ' ' + (imp.tipo === 'materiales' ? 'materiales' : 'pedidos') + '</button><div id="resImp"></div>';
+      document.getElementById('go').onclick = importar;
+    }
+
+    async function importar() {
+      const go = document.getElementById('go');
+      go.disabled = true; go.innerHTML = '<span class="spin"></span> Importando… puede tardar un minuto';
+      try {
+        const r = await api({ op: 'importar', tipo: imp.tipo, filas: imp.filas });
+        const avisos = (r.avisos || []).join('\n\n');
+        if (!r.ok) throw new Error((r.mensaje || 'Error') + (avisos ? '\n\n' + avisos : ''));
+        delete cache[H_PEDIDOS]; delete cache[H_ALMACEN];
+        imp.filas = null;
+        document.getElementById('previa').innerHTML = '';
+        await mensaje('✅ Importación hecha', avisos || 'Listo.', [['Seguir aquí', false], [imp.tipo === 'materiales' ? 'Ver almacén' : 'Ver pedidos', true, 'primary']])
+          .then(ir => { if (ir) location.hash = imp.tipo === 'materiales' ? '#almacen' : '#pedidos'; });
+      } catch (e) {
+        go.disabled = false; go.textContent = 'Reintentar la importación';
+        mensaje('No se ha importado', e.message);
+      }
+    }
+
+    // ---------- Acciones del menú Planificador ----------
+    const ACCIONES = [
+      { op: 'replanificar', ico: '🔄', t: 'Replanificar calendario ahora', s: 'Vuelve a colocar todas las faenas pendientes en los calendarios de cada departamento.' },
+      { op: 'archivar', ico: '🗄️', t: 'Archivar OT terminadas y anuladas', s: 'Las saca de Pedidos y de los calendarios y las guarda en Archivo pedidos.',
+        pregunta: 'Las OT con estado TERMINADA o ANULADA se sacan de Pedidos, de las pestañas de departamento y de los calendarios, y se guardan en Archivo pedidos.' },
+      { op: 'fichajesHoy', ico: '🕘', t: 'Actualizar fichajes de hoy', s: 'Rehace las pestañas «Fichaje» de cada departamento con lo de hoy.' },
+      { op: 'copia', ico: '💾', t: 'Copia de seguridad ahora', s: 'Guarda una copia de toda la hoja en tu Drive.' }
+    ];
+    function vistaAcciones() {
+      const $v = document.getElementById('vista');
+      $v.innerHTML = '<div class="vhead"><h2>Acciones</h2><span class="meta">Lo mismo que el menú 📅 Planificador de la hoja</span></div><div class="acciones">' +
+        ACCIONES.map(a => '<button class="accion" data-op="' + a.op + '"><span class="ico">' + a.ico + '</span><b>' + esc(a.t) + '</b><span>' + esc(a.s) + '</span></button>').join('') + '</div>';
+      $v.querySelectorAll('[data-op]').forEach(b => b.onclick = async () => {
+        const a = ACCIONES.find(x => x.op === b.dataset.op);
+        if (a.pregunta && !await confirmar(a.t + '?', a.pregunta, 'Sí, archivar')) return;
+        const antes = b.innerHTML;
+        b.disabled = true; b.innerHTML = '<span class="ico"><span class="spin"></span></span><b>' + esc(a.t) + '</b><span>Trabajando… puede tardar un minuto.</span>';
+        try {
+          const r = await api({ op: a.op });
+          if (!r.ok) throw new Error(r.mensaje);
+          Object.keys(cache).forEach(k => delete cache[k]);
+          mensaje(a.ico + ' ' + a.t, (r.avisos || []).join('\n\n') || 'Hecho.');
+        } catch (e) { mensaje('No se ha podido hacer', e.message); }
+        b.disabled = false; b.innerHTML = antes;
+      });
+    }
+
+    arrancar();
+  </script>
+</body>
+</html>
