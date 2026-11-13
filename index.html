@@ -64,6 +64,16 @@
     #matMsg { margin-top: 10px; font-size: 14px; font-weight: bold; min-height: 18px; }
     .usados { margin-top: 10px; font-size: 13px; color: #3c4043; }
     .usados div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid #f1f3f4; }
+    .secado { background: #fff4d6; border: 2px solid #f29900; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; text-align: left; color: #5c3b00; font-size: 14px; }
+    .secado b { display: block; font-size: 16px; color: #8a4b00; margin-bottom: 4px; }
+    .aviso-capa { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .aviso-capa.oculto { display: none; }
+    .aviso-caja { background: #fff; border-radius: 16px; padding: 22px; max-width: 380px; width: 100%; text-align: center; border-top: 8px solid #f29900; }
+    .aviso-caja .ico { font-size: 44px; }
+    .aviso-caja h3 { margin: 6px 0 8px; color: #8a4b00; font-size: 20px; }
+    .aviso-caja p { color: #3c4043; font-size: 15px; margin: 0 0 6px; }
+    .btn-aviso { background: #f29900; color: #fff; }
+    .btn-cancelar { background: #f1f3f4; color: #3c4043; font-size: 16px; padding: 12px; }
   </style>
 </head>
 <body>
@@ -76,6 +86,9 @@
       <div class="info-item"><strong>Cliente:</strong> <span id="txtCliente"></span></div>
       <div class="info-item"><strong>Descripción:</strong> <span id="txtDescripcion"></span></div>
     </div>
+
+    <!-- Aviso: la pintura aún se está secando -->
+    <div id="avisoSecado" class="secado oculto" role="alert"></div>
 
     <!-- Primer acceso: crear PIN -->
     <div id="panelCrear" class="oculto">
@@ -136,6 +149,16 @@
     </div>
   </div>
 
+  <div id="capaSecado" class="aviso-capa oculto" role="dialog" aria-modal="true" aria-labelledby="tituloSecado">
+    <div class="aviso-caja">
+      <div class="ico">⚠️</div>
+      <h3 id="tituloSecado">Atención: pintura secándose</h3>
+      <p id="textoSecado"></p>
+      <button id="btnSecadoSi" class="btn btn-aviso">Entendido, fichar igualmente</button>
+      <button id="btnSecadoNo" class="btn btn-cancelar">No fichar ahora</button>
+    </div>
+  </div>
+
   <div id="escaner" class="oculto">
     <video id="video" playsinline muted></video>
     <div class="marco"></div>
@@ -152,6 +175,7 @@
     let ot = (params.get('ot') || '').trim();
     let operario = (params.get('operario') || '').trim();
     let fichado = false;
+    let secado = null; // aviso de secado de pintura (lo manda el servidor)
 
     function estado(texto, clase) { $('statusMsg').innerText = texto; $('statusMsg').className = clase || ''; }
     function botones() { $('btnEntrada').disabled = fichado; $('btnSalida').disabled = !fichado; }
@@ -185,6 +209,12 @@
         $('txtCliente').innerText = info.cliente || '';
         $('txtDescripcion').innerText = info.descripcion || '';
         fichado = !!info.yaFichado;
+        secado = info.secado || null;
+        if (secado) {
+          $('avisoSecado').innerHTML = '<b>⚠️ Pintura secándose</b>Pintura la terminó el ' + secado.terminada +
+            '. No se debería manipular hasta el ' + secado.hasta + ' (quedan ' + secado.quedan + ').';
+          $('avisoSecado').classList.remove('oculto');
+        }
         estado('');
         if (info.pinEstado === 'desconocido') estado('Este enlace no corresponde a ningún operario configurado. Avisa al responsable.', 'error');
         else if (info.pinEstado === 'crear') $('panelCrear').classList.remove('oculto');
@@ -225,7 +255,23 @@
       }
       botones();
     }
-    $('btnEntrada').addEventListener('click', () => fichar('Entrada'));
+    // Si la pintura aún se está secando, se avisa antes de fichar la entrada (se puede fichar igual).
+    function avisarSecado() {
+      return new Promise(res => {
+        $('textoSecado').innerText = 'Pintura terminó esta faena el ' + secado.terminada + '. Necesita ' + secado.horas +
+          ' horas de secado: no se debería manipular hasta el ' + secado.hasta + ' (quedan ' + secado.quedan + ').';
+        $('capaSecado').classList.remove('oculto');
+        $('btnSecadoSi').focus();
+        const cerrar = v => { $('capaSecado').classList.add('oculto'); $('btnSecadoSi').onclick = $('btnSecadoNo').onclick = null; res(v); };
+        $('btnSecadoSi').onclick = () => cerrar(true);
+        $('btnSecadoNo').onclick = () => cerrar(false);
+      });
+    }
+    $('btnEntrada').addEventListener('click', async () => {
+      if (!/^\d{4}$/.test($('pin').value)) { estado('Escribe tu PIN de 4 cifras.', 'error'); return; }
+      if (secado && !(await avisarSecado())) { estado('No has fichado. La pintura aún se está secando.', 'error'); return; }
+      fichar('Entrada');
+    });
     $('btnSalida').addEventListener('click', () => fichar('Salida'));
 
     // Faena acabada: el operario da por terminada la OT en su departamento (ficha su salida si la tenía abierta).
